@@ -67,7 +67,7 @@ def evaluate(model, loader_tr, loader_te, scheduler, args, epoch=0):
         "loss/te": loss_te,
         "loss/tr": loss_tr,
         "lr": scheduler.get_last_lr()[0],
-        "train_step": epoch * len(loader) * args.ipe,
+        "train_step": epoch * len(loader_tr) * args.ipe,
         "images/te": wandb.Image(image_path)
     })
 
