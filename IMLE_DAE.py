@@ -71,11 +71,21 @@ class ImageLatentDataset(Dataset):
                     dynamic_ncols=True):
 
                     z = model.get_codes(len(xn), device=xn.device)
-                    losses = torch.sum(loss_fn(model(xn, z), x), dim=1)
+                    fxn = model(xn, z)
+                    # tqdm.write(f"FXN SHAPE {fxn.shape}")
+                    losses = loss_fn(fxn, x)
+                    # tqdm.write(f"LOSSES SHAPE {losses.shape}")
+                    losses = torch.sum(losses, dim=1)
+                    # tqdm.write(f"LOSSES SHAPE {losses.shape}")
+
+                    # tqdm.write(f"LL {least_losses}")
 
                     change_idxs = (losses < least_losses[start_idx:stop_idx])
                     least_losses[start_idx:stop_idx][change_idxs] = losses[change_idxs]
                     best_latents[start_idx:stop_idx][change_idxs] = z[change_idxs]
+
+                    # tqdm.write(f"LO {losses}\n  {change_idxs}")
+                    # tqdm.write(f"LL {least_losses}")
 
                 noised_images.append(xn.cpu())
                 images.append(x.cpu())
@@ -130,6 +140,9 @@ if __name__ == "__main__":
     model = Models.IMLE_DAE().to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=1e-5)
     loss_fn = nn.BCELoss()
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer,
+        step_size=args.epochs // 5,
+        gamma=.3)
 
     for epoch in tqdm(range(args.epochs),
         dynamic_ncols=True,
@@ -147,7 +160,7 @@ if __name__ == "__main__":
             num_workers=args.num_workers)
         chain_loader = itertools.chain(*[loader] * args.steps_per_image)
 
-        for xn,z,x in tqdm(chain_loader,
+        for idx,(xn,z,x) in tqdm(enumerate(chain_loader),
             desc="Batches",
             total=len(loader) * args.steps_per_image,
             leave=False,
@@ -163,6 +176,12 @@ if __name__ == "__main__":
             optimizer.step()
             optimizer.zero_grad(set_to_none=True)
 
+            # if idx == 1:
+            #     Utils.images_to_pil_image(xn).save(f"{epoch}_xn.png")
+            #     Utils.images_to_pil_image(x).save(f"{epoch}_x.png")
+            #     Utils.images_to_pil_image(fxn).save(f"{epoch}_xn_f.png")
+        
+        scheduler.step()
         if epoch % args.eval_iter == 0 or epoch == args.epochs - 1:
 
             eval_loss_fn = nn.MSELoss(reduction="sum")
@@ -188,7 +207,7 @@ if __name__ == "__main__":
             loss_te = loss_te.item() / total_te
 
             acc_te = LinearProbe.linear_probe(model, loader_tr, loader_te, args)
-            tqdm.write(f"Epoch {epoch+1:5}/{args.epochs} - loss/tr={loss_tr:.5f} loss/te={loss_te:.5f} acc/te={acc_te:.5f}")
+            tqdm.write(f"Epoch {epoch+1:5}/{args.epochs} - lr={scheduler.get_last_lr()[0]:.5e} loss/tr={loss_tr:.5f} loss/te={loss_te:.5f} acc/te={acc_te:.5f}")
     
         
 

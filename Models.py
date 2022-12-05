@@ -49,9 +49,31 @@ class IMLE_DAE(nn.Module):
         z = self.get_codes(len(x), x.device) if z is None else z
         fx = self.encoder(x)
         fx = self.ada_in(fx, z)
+        # fx[:, :64] = 0
         fx = self.decoder(fx)
         return fx
 
+
+class ConcatCodes(nn.Module):
+
+    def __init__(self, c, epsilon=1e-8, act_type="leakyrelu", normalize_z=True):
+        super(ConcatCodes, self).__init__()
+        self.register_buffer("epsilon", torch.tensor(epsilon))
+        self.c = c
+
+        layers = []
+        if normalize_z:
+            layers.append(("normalize_z", PixelNormLayer(epsilon=epsilon)))
+        layers.append(("mapping_net", MLP(in_dim=512,
+            h_dim=512,
+            layers=8,
+            out_dim=self.c,
+            equalized_lr=True,
+            act_type=act_type)))
+
+        self.model = nn.Sequential(OrderedDict(layers))
+
+    def forward(self, x, z): return torch.cat([self.model(z), x], dim=1)
 
 class AdaIN(nn.Module):
     """AdaIN adapted for a transformer. Expects a BSxNPxC batch of images, where

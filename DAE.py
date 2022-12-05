@@ -26,7 +26,6 @@ def get_args():
 
 if __name__ == "__main__":
     args = get_args()
-
     tqdm.write(str(args))
     Utils.set_seed(args.seed)
 
@@ -61,6 +60,9 @@ if __name__ == "__main__":
     model = Models.DAE().to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=1e-5)
     loss_fn = nn.BCELoss()
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer,
+        step_size=args.epochs // 5,
+        gamma=.3)
 
     for epoch in tqdm(range(args.epochs),
         dynamic_ncols=True,
@@ -78,6 +80,8 @@ if __name__ == "__main__":
             optimizer.step()
             optimizer.zero_grad(set_to_none=True)
 
+
+        scheduler.step()
         if epoch % args.eval_iter == 0 or epoch == args.epochs - 1:
 
             eval_loss_fn = nn.MSELoss(reduction="sum")
@@ -103,8 +107,7 @@ if __name__ == "__main__":
             loss_te = loss_te.item() / total_te
 
             acc_te = LinearProbe.linear_probe(model, loader_tr, loader_te, args)
-            tqdm.write(f"Epoch {epoch+1:5}/{args.epochs} - loss/tr={loss_tr:.5f} loss/te={loss_te:.5f} acc/te={acc_te:.5f}")
-    
+            tqdm.write(f"Epoch {epoch+1:5}/{args.epochs} - lr={scheduler.get_last_lr()[0]:.5e} loss/tr={loss_tr:.5f} loss/te={loss_te:.5f} acc/te={acc_te:.5f}")    
         
 
 

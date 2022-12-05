@@ -1,7 +1,10 @@
 import numpy as np
+from PIL import Image
 import random
 import torch
 from torchvision import transforms
+import matplotlib.pyplot as plt
+import io
 
 def with_noise(x, std=.4):
     return x + torch.randn(*x.shape, device=x.device) * std
@@ -25,3 +28,35 @@ def set_seed(seed):
     torch.cuda.manual_seed(seed)
     np.random.seed(seed)
     random.seed(seed)
+
+def images_to_pil_image(images):
+    """Returns tensor datastructure [images] as a PIL image."""
+    if images.shape[-1] == 784 and len(images.shape) == 3:
+        images = images.view(images.shape[0], images.shape[1], 28, 28)
+    elif images.shape[-1] == 784 and len(images.shape) == 2:
+        images = images.view(images.shape[0], 1, 28, 28)
+    elif images.shape[-1] == 28 and len(images.shape) == 3:
+        images = images.view(images.shape[0], 1, 28, 28)
+    elif images.shape[-1] == 28 and len(images.shape) == 4:
+        pass
+    elif isinstance(images, list):
+        pass
+    else:
+        raise NotImplementedError()
+
+
+    fig, axs = plt.subplots(ncols=max([len(image_row) for image_row in images]),
+        nrows=len(images),
+        squeeze=False)
+
+    for i,images_row in enumerate(images):
+        for j,image in enumerate(images_row):
+            image = torch.clip((image * 255), 0, 255).int().cpu()
+            axs[i, j].imshow(np.asarray(image), cmap='Greys_r')
+            axs[i, j].set(xticklabels=[], yticklabels=[], xticks=[], yticks=[])
+
+    buf = io.BytesIO()
+    fig.savefig(buf, dpi=256)
+    buf.seek(0)
+    plt.close("all")
+    return Image.open(buf)
