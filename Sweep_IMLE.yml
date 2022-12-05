@@ -1,0 +1,22 @@
+program: IMLE_DAE.py
+name: imle
+method: grid
+parameters:
+  seed:
+    values: [1000, 2000, 3000, 4000, 5000]
+  lr:
+    values: [.0001, .001, .01, .1]
+  evals:
+    value: 20
+  epochs:
+    value: 20
+  ns:
+    value: 128
+  code_bs:
+    value: 60000
+  ipe:
+    value: 50
+  std:
+    value: 0.8
+  suffix:
+    value: sweep

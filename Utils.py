@@ -13,8 +13,13 @@ def conditional_make_folder(f):
     except:
         pass
 
-def with_noise(x, std=.8):
-    return x + torch.randn(*x.shape, device=x.device) * std
+def with_noise(x, std=.8, seed=None):
+    if seed is None:
+        return x + torch.randn(*x.shape, device=x.device) * std
+    else:
+        noise = torch.zeros(*x.shape, device=x.device)
+        noise.normal_(generator=torch.Generator(x.device).manual_seed(seed))
+        return x + noise * std
 
 def min_max_normalization(tensor, min_value, max_value):
     min_tensor = tensor.min()

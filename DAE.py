@@ -18,7 +18,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def dae_model_folder(args, make_folder=True):
     subsample = "_all" if args.subsample is None else args.subsample
-    suffix = "" if args.suffix is None else f"-{arg.suffix}"
+    suffix = "" if args.suffix is None else f"-{args.suffix}"
     folder = f"{args.save_folder}/dae_models/dae-bs{args.bs}-epochs{args.epochs}-lr{args.bs}-std{args.std}-subsample{subsample}seed{args.seed}-{args.uid}{suffix}"
 
     if make_folder:
@@ -26,36 +26,37 @@ def dae_model_folder(args, make_folder=True):
 
     return folder
 
-def evaluate(model, loader_tr, loader_te, scheduler, args, epoch=0):
+def evaluate(model, loader_tr, loader_te, scheduler, args, cur_step):
     eval_loss_fn = nn.MSELoss(reduction="sum")
     loss_tr, loss_te = 0, 0
     total_tr, total_te = 0, 0
-    for x,_ in loader_tr:
-        x = x.to(device, non_blocking=True)
-        x = x.view(x.shape[0], -1)
-        nx_tr = Utils.with_noise(x, std=args.std)
-        fxn_tr = model(nx_tr)
-        loss_tr += eval_loss_fn(fxn_tr, x)
-        total_tr += len(x)
+    with torch.no_grad():
+        for x,_ in loader_tr:
+            x = x.to(device, non_blocking=True)
+            x = x.view(x.shape[0], -1)
+            nx_tr = Utils.with_noise(x, std=args.std)
+            fxn_tr = model(nx_tr)
+            loss_tr += eval_loss_fn(fxn_tr, x)
+            total_tr += len(x)
 
-    for x_te,_ in loader_te:
-        x_te = x_te.to(device, non_blocking=True)
-        x_te = x_te.view(x.shape[0], -1)
-        nx_te = Utils.with_noise(x_te, std=args.std)
-        fxn_te = model(nx_te)
-        loss_te += eval_loss_fn(fxn_te, x_te)
-        total_te += len(x_te)
+        for x_te,_ in loader_te:
+            x_te = x_te.to(device, non_blocking=True)
+            x_te = x_te.view(x.shape[0], -1)
+            nx_te = Utils.with_noise(x_te, std=args.std)
+            fxn_te = model(nx_te)
+            loss_te += eval_loss_fn(fxn_te, x_te)
+            total_te += len(x_te)
     
     loss_tr = loss_tr.item() / total_tr
     loss_te = loss_te.item() / total_te
 
     acc_te = LinearProbe.linear_probe(model, loader_tr, loader_te, args)
-    tqdm.write(f"Epoch {epoch:5}/{args.epochs} step {epoch * len(loader_tr):6}/{len(loader_tr) * args.epochs} - lr={scheduler.get_last_lr()[0]:.5e} loss/tr={loss_tr:.5f} loss/te={loss_te:.5f} acc/te={acc_te:.5f}")
+    tqdm.write(f"Step {cur_step:6}/{len(loader_tr) * args.epochs} - lr={scheduler.get_last_lr()[0]:.5e} loss/tr={loss_tr:.5f} loss/te={loss_te:.5f} acc/te={acc_te:.5f}")
 
     # Create an image to visualize how the model is doing
     image_save_folder = f"{dae_model_folder(args, make_folder=True)}/images"
     Utils.conditional_make_folder(image_save_folder)
-    image_path = f"{image_save_folder}/{epoch}_te.png"
+    image_path = f"{image_save_folder}/{cur_step}_te.png"
     image = torch.cat([x_te[:8].unsqueeze(1), nx_te[:8].unsqueeze(1), fxn_te[:8].unsqueeze(1)], dim=1)
     Utils.images_to_pil_image(image).save(image_path)
 
@@ -64,7 +65,7 @@ def evaluate(model, loader_tr, loader_te, scheduler, args, epoch=0):
         "loss/te": loss_te,
         "loss/tr": loss_tr,
         "lr": scheduler.get_last_lr()[0],
-        "train_step": epoch * len(loader_tr),
+        "train_step": cur_step,
         "images/te": wandb.Image(image_path)
     })
 
@@ -124,8 +125,10 @@ if __name__ == "__main__":
         step_size=args.epochs // 5,
         gamma=.3)
 
-    _ = evaluate(model, loader_tr, loader_te, scheduler, args, epoch=0)
-
+    cur_step = 0
+    num_steps = len(loader_tr) * args.epochs
+    log_iter = num_steps // args.evals
+    _ = evaluate(model, loader_tr, loader_te, scheduler, args, cur_step)
     for epoch in tqdm(range(args.epochs),
         dynamic_ncols=True,
         desc="Epochs"):
@@ -141,9 +144,10 @@ if __name__ == "__main__":
             loss.backward()
             optimizer.step()
             optimizer.zero_grad(set_to_none=True)
+            cur_step += 1
         
-        if epoch % args.eval_iter == 0 or epoch == args.epochs - 1:
-            _ = evaluate(model, loader_tr, loader_te, scheduler, args, epoch+1)
+        if cur_step % log_iter == 0 or cur_step == num_steps:
+            _ = evaluate(model, loader_tr, loader_te, scheduler, args, cur_step)
         scheduler.step() 
         
 
