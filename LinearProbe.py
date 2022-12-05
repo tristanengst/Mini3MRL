@@ -14,8 +14,11 @@ class ProbeWithBackbone(nn.Module):
         self.encoder = encoder
         self.probe = nn.Linear(64, 10)
 
-    def forward(self, x): return self.probe(self.encoder(x))
-
+    def forward(self, x):
+        with torch.no_grad():
+            fx = self.encoder(x)
+        return self.probe(fx)
+        
 def evaluate(model, loader_te, args, noise=False):
     """
     """
