@@ -19,7 +19,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 def dae_model_folder(args, make_folder=True):
     subsample = "_all" if args.subsample is None else args.subsample
     suffix = "" if args.suffix is None else f"-{arg.suffix}"
-    folder = f"{args.save_folder}/dae_models/imle-bs{args.bs}-epochs{args.epochs}-lr{args.bs}-std{args.std}-subsample{subsample}seed{args.seed}-{args.uid}{suffix}"
+    folder = f"{args.save_folder}/dae_models/dae-bs{args.bs}-epochs{args.epochs}-lr{args.bs}-std{args.std}-subsample{subsample}seed{args.seed}-{args.uid}{suffix}"
 
     if make_folder:
         Utils.conditional_make_folder(folder)
