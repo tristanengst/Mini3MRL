@@ -51,7 +51,7 @@ def evaluate(model, loader_tr, loader_te, scheduler, args, epoch=0):
     loss_te = loss_te.item() / total_te
 
     acc_te = LinearProbe.linear_probe(model, loader_tr, loader_te, args)
-    tqdm.write(f"Epoch {epoch+1:5}/{args.epochs} step {args.ipe * len(loader_tr) * epoch}/{chain_loader_len * args.epochs}- lr={scheduler.get_last_lr()[0]:.5e} loss/tr={loss_tr:.5f} loss/te={loss_te:.5f} acc/te={acc_te:.5f}")
+    tqdm.write(f"Epoch {epoch+1:5}/{args.epochs} step {args.ipe * len(loader_tr) * epoch}/{len(loader_tr) * args.ipe * args.epochs}- lr={scheduler.get_last_lr()[0]:.5e} loss/tr={loss_tr:.5f} loss/te={loss_te:.5f} acc/te={acc_te:.5f}")
 
     # Create an image to visualize how the model is doing
     image_save_folder = f"{imle_model_folder(args, make_folder=True)}/images"
