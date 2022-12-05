@@ -54,11 +54,28 @@ class IMLE_DAE(nn.Module):
 
         self.code_dim = 512
 
-    def get_codes(self, bs, device="cpu"):
-        return torch.randn(bs, self.code_dim, device=device)
+    def get_codes(self, bs, device="cpu", seed=None):
+        """Returns [bs] latent codes to be passed into the model.
+
+        Args:
+        bs      -- number of latent codes to return
+        device  -- device to return latent codes on
+        seed    -- None for no seed (outputs will be different on different
+                    calls), or a number for a fixed seed
+        """
+        if seed is None:
+            return torch.randn(bs, self.code_dim, device=device)
+        else:
+            z = torch.zeros(bs, self.code_dim, device=device)
+            z.normal_(generator=torch.Generator(device).manual_seed(seed))
+            return z
     
-    def forward(self, x, z=None, num_z=1):
-        z = self.get_codes(len(x) * num_z, x.device) if z is None else z
+    def forward(self, x, z=None, num_z=1, seed=None):
+        if z is None:
+            z = self.get_codes(len(x) * num_z,
+                device=x.device,
+                seed=seed)
+
         fx = self.encoder(x)
         fx = self.ada_in(fx, z)
         fx = self.decoder(fx)

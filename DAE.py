@@ -107,7 +107,6 @@ if __name__ == "__main__":
         transform=Utils.transforms_tr)
     loader_te = DataLoader(data_te,
         batch_size=args.bs,
-        shuffle=True,
         num_workers=20,
         persistent_workers=False,
         pin_memory=True)

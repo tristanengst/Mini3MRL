@@ -58,7 +58,7 @@ def evaluate(model, loader_tr, loader_te, scheduler, args, epoch=0):
     Utils.conditional_make_folder(image_save_folder)
     image_path = f"{image_save_folder}/{epoch}_te.png"
     with torch.no_grad():
-        fxn_te = model(nx_te[:8], num_z=6).view(8, 6, 784)
+        fxn_te = model(nx_te[:8], num_z=6, seed=args.seed).view(8, 6, 784)
     image = torch.cat([x_te[:8].unsqueeze(1), nx_te[:8].unsqueeze(1), fxn_te], dim=1)
     Utils.images_to_pil_image(image).save(image_path)
 
