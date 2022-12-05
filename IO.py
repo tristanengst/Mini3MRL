@@ -1,4 +1,5 @@
 import argparse
+import os
 
 def parser_with_default_args(P):
     P.add_argument("--wandb", default="disabled", choices=["disabled", "online"],
@@ -11,6 +12,8 @@ def parser_with_default_args(P):
         help="Number of DataLoader workers")
     P.add_argument("--seed", default=42, type=int,
         help="Number of DataLoader workers")
+    P.add_argument("--save_folder", default=f"{os.path.abspath(os.path.dirname(__file__))}",
+        help="Absolute path to where to save")
     return P
 
 def parser_with_training_args(P):
@@ -22,6 +25,8 @@ def parser_with_training_args(P):
         help="Batch size")
     P.add_argument("--subsample",type=int, default=None,
         help="Number of training examples to use")
+    P.add_argument("--std",type=float, default=.8,
+        help="Noise standard deviation")
     return P
 
 def parser_with_probe_args(P):
@@ -36,6 +41,6 @@ def parser_with_imle_args(P):
         help="Number of latent codes to take the min over per image")
     P.add_argument("--code_bs",type=int, default=10000,
         help="Number of images to sample codes for at once")
-    P.add_argument("--steps_per_image", default=5, type=int,
-        help="Number of gradient steps per image-code pair")
+    P.add_argument("--ipe", default=50, type=int,
+        help="Number of gradient steps per code.")
     return P

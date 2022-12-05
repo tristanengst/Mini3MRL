@@ -1,4 +1,5 @@
 import argparse
+import os
 import itertools
 import torch
 import torch.nn as nn
@@ -7,6 +8,8 @@ from torchvision import transforms
 from torchvision.datasets import MNIST
 from tqdm import tqdm
 
+import wandb
+
 import Models
 import IO
 import LinearProbe
@@ -14,7 +17,59 @@ import Utils
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-def get_name(args): pass
+def imle_model_folder(args, make_folder=True):
+    subsample = "_all" if args.subsample is None else args.subsample
+    suffix = "" if args.suffix is None else f"-{arg.suffix}"
+    folder = f"{args.save_folder}/imle_models/imle-bs{args.bs}-epochs{args.epochs}-ipe{args.ipe}-lr{args.bs}-ns{args.ns}-std{args.std}-subsample{subsample}seed{args.seed}-{args.uid}{suffix}"
+
+    if make_folder:
+        Utils.conditional_make_folder(folder)
+
+    return folder
+
+def evaluate(model, loader_tr, loader_te, scheduler, args, epoch=0):
+    eval_loss_fn = nn.MSELoss(reduction="sum")
+    loss_tr, loss_te = 0, 0
+    total_tr, total_te = 0, 0
+    for x,_ in loader_tr:
+        x = x.to(device, non_blocking=True)
+        x = x.view(x.shape[0], -1)
+        nx_tr = Utils.with_noise(x, std=args.std)
+        fxn_tr = model(nx_tr)
+        loss_tr += eval_loss_fn(fxn_tr, x)
+        total_tr += len(x)
+
+    for x_te,_ in loader_te:
+        x_te = x_te.to(device, non_blocking=True)
+        x_te = x_te.view(x.shape[0], -1)
+        nx_te = Utils.with_noise(x_te, std=args.std)
+        fxn_te = model(nx_te)
+        loss_te += eval_loss_fn(fxn_te, x_te)
+        total_te += len(x_te)
+    
+    loss_tr = loss_tr.item() / total_tr
+    loss_te = loss_te.item() / total_te
+
+    acc_te = LinearProbe.linear_probe(model, loader_tr, loader_te, args)
+    tqdm.write(f"Epoch {epoch+1:5}/{args.epochs} step {args.ipe * len(loader_tr) * epoch}/{chain_loader_len * args.epochs}- lr={scheduler.get_last_lr()[0]:.5e} loss/tr={loss_tr:.5f} loss/te={loss_te:.5f} acc/te={acc_te:.5f}")
+
+    # Create an image to visualize how the model is doing
+    image_save_folder = f"{imle_model_folder(args, make_folder=True)}/images"
+    Utils.conditional_make_folder(image_save_folder)
+    image_path = f"{image_save_folder}/{epoch}_te.png"
+    with torch.no_grad():
+        fxn_te = model(nx_te[:8], num_z=6).view(8, 6, 784)
+    image = torch.cat([x_te[:8].unsqueeze(1), nx_te[:8].unsqueeze(1), fxn_te], dim=1)
+    Utils.images_to_pil_image(image).save(image_path)
+
+    wandb.log({
+        "acc/te": acc_te,
+        "loss/te": loss_te,
+        "loss/tr": loss_tr,
+        "lr": scheduler.get_last_lr()[0],
+        "train_step": epoch * len(loader) * args.ipe,
+        "images/te": wandb.Image(image_path)
+    })
 
 class ImageLatentDataset(Dataset):
 
@@ -63,7 +118,7 @@ class ImageLatentDataset(Dataset):
                 stop_idx = min(start_idx + args.code_bs, len(dataset))
                 x = x.to(device, non_blocking=True)
                 x = x.view(x.shape[0], -1)
-                xn = Utils.with_noise(x)
+                xn = Utils.with_noise(x, std=args.std)
 
                 for sample_idx in tqdm(range(args.ns),
                     desc="Sampling inner loop",
@@ -72,20 +127,12 @@ class ImageLatentDataset(Dataset):
 
                     z = model.get_codes(len(xn), device=xn.device)
                     fxn = model(xn, z)
-                    # tqdm.write(f"FXN SHAPE {fxn.shape}")
                     losses = loss_fn(fxn, x)
-                    # tqdm.write(f"LOSSES SHAPE {losses.shape}")
                     losses = torch.sum(losses, dim=1)
-                    # tqdm.write(f"LOSSES SHAPE {losses.shape}")
-
-                    # tqdm.write(f"LL {least_losses}")
 
                     change_idxs = (losses < least_losses[start_idx:stop_idx])
                     least_losses[start_idx:stop_idx][change_idxs] = losses[change_idxs]
                     best_latents[start_idx:stop_idx][change_idxs] = z[change_idxs]
-
-                    # tqdm.write(f"LO {losses}\n  {change_idxs}")
-                    # tqdm.write(f"LL {least_losses}")
 
                 noised_images.append(xn.cpu())
                 images.append(x.cpu())
@@ -102,12 +149,19 @@ def get_args():
     P = IO.parser_with_imle_args(P)
 
     args = P.parse_args()
+    args.uid = wandb.util.generate_id()
     return args
 
 if __name__ == "__main__":
     args = get_args()
     tqdm.write(str(args))
     Utils.set_seed(args.seed)
+
+    wandb.init(anonymous="allow", id=args.uid, config=args,
+        mode=args.wandb, project="Mini3MRL",
+        name=os.path.basename(imle_model_folder(args)))
+
+    tqdm.write(f"Will save to {imle_model_folder(args)}")
 
     data_tr = MNIST("./data/",
         download=True,
@@ -126,15 +180,15 @@ if __name__ == "__main__":
         transform=Utils.transforms_tr)
     loader_te = DataLoader(data_te,
         batch_size=args.bs,
-        shuffle=True,
-        num_workers=20,
+        num_workers=24,
         persistent_workers=True,
         pin_memory=True)
     loader_tr = DataLoader(data_tr,
         batch_size=args.bs,
         shuffle=True,
-        num_workers=20,
+        num_workers=24,
         persistent_workers=True,
+        prefetch_factor=8,
         pin_memory=True)
 
     model = Models.IMLE_DAE().to(device)
@@ -144,6 +198,7 @@ if __name__ == "__main__":
         step_size=args.epochs // 5,
         gamma=.3)
 
+    _ = evaluate(model, loader_tr, loader_te, scheduler, args, epoch=0)
     for epoch in tqdm(range(args.epochs),
         dynamic_ncols=True,
         desc="Epochs"):
@@ -158,11 +213,12 @@ if __name__ == "__main__":
             pin_memory=True,
             batch_size=args.bs,
             num_workers=args.num_workers)
-        chain_loader = itertools.chain(*[loader] * args.steps_per_image)
+        chain_loader = itertools.chain(*[loader] * args.ipe)
+        chain_loader_len = len(loader) * args.ipe
 
         for idx,(xn,z,x) in tqdm(enumerate(chain_loader),
             desc="Batches",
-            total=len(loader) * args.steps_per_image,
+            total=len(loader) * args.ipe,
             leave=False,
             dynamic_ncols=True):
 
@@ -175,39 +231,11 @@ if __name__ == "__main__":
             loss.backward()
             optimizer.step()
             optimizer.zero_grad(set_to_none=True)
-
-            # if idx == 1:
-            #     Utils.images_to_pil_image(xn).save(f"{epoch}_xn.png")
-            #     Utils.images_to_pil_image(x).save(f"{epoch}_x.png")
-            #     Utils.images_to_pil_image(fxn).save(f"{epoch}_xn_f.png")
         
-        scheduler.step()
         if epoch % args.eval_iter == 0 or epoch == args.epochs - 1:
-
-            eval_loss_fn = nn.MSELoss(reduction="sum")
-            loss_tr, loss_te = 0, 0
-            total_tr, total_te = 0, 0
-            for x,_ in loader_tr:
-                x = x.to(device, non_blocking=True)
-                x = x.view(x.shape[0], -1)
-                nx = Utils.with_noise(x)
-                fxn = model(nx)
-                loss_tr += eval_loss_fn(fxn, x)
-                total_tr += len(x)
-
-            for x,_ in loader_te:
-                x = x.to(device, non_blocking=True)
-                x = x.view(x.shape[0], -1)
-                nx = Utils.with_noise(x)
-                fxn = model(nx)
-                loss_te += eval_loss_fn(fxn, x)
-                total_te += len(x)
-            
-            loss_tr = loss_tr.item() / total_tr
-            loss_te = loss_te.item() / total_te
-
-            acc_te = LinearProbe.linear_probe(model, loader_tr, loader_te, args)
-            tqdm.write(f"Epoch {epoch+1:5}/{args.epochs} - lr={scheduler.get_last_lr()[0]:.5e} loss/tr={loss_tr:.5f} loss/te={loss_te:.5f} acc/te={acc_te:.5f}")
+            _ = evaluate(model, loader_tr, loader_te, scheduler, args, epoch+1)
+    
+        scheduler.step()
     
         
 

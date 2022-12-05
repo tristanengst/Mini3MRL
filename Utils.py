@@ -1,4 +1,5 @@
 import numpy as np
+import os
 from PIL import Image
 import random
 import torch
@@ -6,7 +7,13 @@ from torchvision import transforms
 import matplotlib.pyplot as plt
 import io
 
-def with_noise(x, std=.4):
+def conditional_make_folder(f):
+    try:
+        os.makedirs(f)
+    except:
+        pass
+
+def with_noise(x, std=.8):
     return x + torch.randn(*x.shape, device=x.device) * std
 
 def min_max_normalization(tensor, min_value, max_value):
