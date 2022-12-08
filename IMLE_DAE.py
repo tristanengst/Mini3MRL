@@ -95,7 +95,7 @@ class ImageLatentDataset(Dataset):
         loss_fn -- distance function that returns a BSx... tensor of distances
                     given BSx... inputs. Typically, this means 'reduction' must
                     be 'none'
-        x       -- tensor of non-noised data to get codes for
+        dataset -- dataset of non-noised images to get codes for
         args    -- argparse Namespace
         """
         with torch.no_grad():
