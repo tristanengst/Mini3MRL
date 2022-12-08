@@ -88,3 +88,26 @@ def noised_linear_probe(loader_tr, loader_te, args):
 
     return evaluate(probe, loader_te, args, noise=True)    
 
+def plain_linear_probe(loader_tr, loader_te, args):
+    probe = nn.Linear(784, 10).to(device)
+    loss_fn = nn.CrossEntropyLoss()
+    optimizer = torch.optim.Adam(probe.parameters(),
+        lr=args.probe_lr,
+        weight_decay=1e-5)
+    
+    for e in tqdm(range(args.probe_epochs),
+        desc="Probe Epochs",
+        leave=False,
+        dynamic_ncols=True):
+
+        for x,y in loader_tr:
+            x = x.to(device, non_blocking=True)
+            y = y.to(device, non_blocking=True)
+            x = x.view(x.shape[0], -1)
+            loss = loss_fn(probe(x), y)
+            loss.backward()
+            optimizer.step()
+            optimizer.zero_grad(set_to_none=True)
+
+    return evaluate(probe, loader_te, args, noise=False) 
+

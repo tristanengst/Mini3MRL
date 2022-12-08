@@ -5,10 +5,8 @@ parameters:
   seed:
     values: [1000, 2000, 3000, 4000, 5000]
   lr:
-    values: [.0001, .001, .01, .1]
+    values: [.001]
   evals:
-    value: 20
-  epochs:
     value: 20
   ns:
     value: 128
@@ -18,5 +16,9 @@ parameters:
     value: 50
   std:
     value: 0.8
+  epochs:
+    value: 20
   suffix:
-    value: sweep
+    value: IMLE
+  wandb:
+    value: online

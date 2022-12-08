@@ -5,12 +5,14 @@ parameters:
   seed:
     values: [1000, 2000, 3000, 4000, 5000]
   lr:
-    values: [.0001, .001, .01, .1]
+    values: [.001]
   evals:
     value: 20
-  epochs:
-    value: 1000
   std:
     value: 0.8
   suffix:
-    value: sweep
+    value: DAE
+  epochs:
+    value: 1000
+  wandb:
+    value: online
