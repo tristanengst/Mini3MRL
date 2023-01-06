@@ -1,0 +1,37 @@
+#!/bin/bash
+
+# The SBATCH directives must appear before any executable line in this script.
+
+#SBATCH --time=TIME
+#SBATCH --account=ACCOUNT
+#SBATCH --mem=100G
+#SBATCH --nodes=1
+#SBATCH --cpus-per-task=NUM_CPUS
+#SBATCH --gres=gpu:a100:NUM_GPUS
+
+#SBATCH --job-name=NAME
+#SBATCH --output=job_results/%x_%a.txt
+
+# Below sets the email notification, swap to your email to receive notifications
+#SBATCH --mail-user=tristanengst@gmail.com
+#SBATCH --mail-type=BEGIN
+#SBATCH --mail-type=END
+#SBATCH --mail-type=FAIL
+#SBATCH --mail-type=REQUEUE
+#SBATCH --mail-type=ALL
+
+export OMP_NUM_THREADS=1
+# Print some info for context.
+pwd
+hostname
+date
+
+echo "Starting job number $SLURM_ARRAY_JOB_ID"
+source ~/.bashrc
+conda activate py3103MRL
+export PYTHONUNBUFFERED=1
+
+SCRIPT
+
+# Print completion time.
+date

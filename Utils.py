@@ -29,8 +29,7 @@ def min_max_normalization(tensor, min_value, max_value):
     tensor = tensor * (max_value - min_value) + min_value
     return tensor
 
-transforms_tr = transforms.Compose([
-    transforms.ToTensor(),
+transforms_mnist = transforms.Compose([
     transforms.Lambda(lambda x: min_max_normalization(x, 0, 1)),
     transforms.Lambda(lambda x: torch.round(x))
 ])
@@ -40,6 +39,31 @@ def set_seed(seed):
     torch.cuda.manual_seed(seed)
     np.random.seed(seed)
     random.seed(seed)
+
+def sample(select_from, k=-1, seed=0):
+    """Returns [k] items sampled without replacement from [select_from] with
+    seed [seed], without changing the internal seed of the program. This
+    explicitly ensures reproducability.
+    """
+    state = random.getstate()
+    random.seed(seed)
+    try:
+        result = random.sample(select_from, k=k)
+    except ValueError as e:
+        tqdm.write(f"Tried to sample {k} from {len(select_from)} things")
+        raise e
+    random.setstate(state)
+    return result
+
+def flatten(xs):
+    """Returns collection [xs] after recursively flattening into a list."""
+    if isinstance(xs, list) or isinstance(xs, set) or isinstance(xs, tuple):
+        result = []
+        for x in xs:
+            result += flatten(x)
+        return result
+    else:
+        return [xs]
 
 def images_to_pil_image(images):
     """Returns tensor datastructure [images] as a PIL image."""

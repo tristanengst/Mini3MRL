@@ -5,25 +5,24 @@ from tqdm import tqdm as tqdm
 
 class MLPEncoder(nn.Module):
 
-    def __init__(self):
+    def __init__(self, in_dim=784, h_dim=1024, out_dim=64):
         super(MLPEncoder, self).__init__()
-        self.encoder = nn.Sequential(
-            nn.Linear(28 * 28, 1024),
-            nn.ReLU(True),
-            nn.Linear(1024, 64),
-            nn.ReLU(True))
+        self.lin1 = nn.Linear(in_dim, h_dim)
+        self.relu = nn.ReLU(True)
+        self.lin2 = nn.Linear(h_dim, out_dim)
     
-    def forward(self, x): return self.encoder(x)
+    def forward(self, x):
+        x = torch.flatten(x, start_dim=1)
+        fx = self.lin1(x)
+        fx = self.relu(fx)
+        fx = self.lin2(fx)
+        return fx
 
 class DAE(nn.Module):
 
     def __init__(self):
         super(DAE, self).__init__()
-        self.encoder = nn.Sequential(
-            nn.Linear(28 * 28, 1024),
-            nn.ReLU(True),
-            nn.Linear(1024, 64),
-            nn.ReLU(True))
+        self.encoder = MLPEncoder()
         self.decoder = nn.Sequential(
             nn.Linear(64, 1024),
             nn.ReLU(True),
@@ -40,11 +39,7 @@ class IMLE_DAE(nn.Module):
     def __init__(self):
         super(IMLE_DAE, self).__init__()
         self.code_dim = 512
-        self.encoder = nn.Sequential(
-            nn.Linear(28 * 28, 1024),
-            nn.ReLU(True),
-            nn.Linear(1024, 64),
-            nn.ReLU(True))
+        self.encoder = MLPEncoder()
         self.decoder = nn.Sequential(
             nn.Linear(64, 1024),
             nn.ReLU(True),

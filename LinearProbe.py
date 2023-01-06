@@ -13,6 +13,7 @@ class ProbeWithBackbone(nn.Module):
         super(ProbeWithBackbone, self).__init__()
         self.encoder = encoder
         self.probe = nn.Linear(64, 10)
+        self.input_shape = (784,)
 
     def forward(self, x):
         with torch.no_grad():
@@ -26,9 +27,8 @@ def evaluate(model, loader_te, args, noise=False):
     loss_fn = nn.CrossEntropyLoss(reduction="mean")
     with torch.no_grad():
         for x,y in loader_te:
-            x = x.to(device, non_blocking=True)
+            x = x.to(device, non_blocking=True).view(x.shape[0], -1)
             y = y.to(device, non_blocking=True)
-            x = x.view(x.shape[0], -1)
             x = Utils.with_noise(x) if noise else x
             fx = model(x)
             loss = loss_fn(fx, y)
@@ -54,9 +54,8 @@ def linear_probe(model, loader_tr, loader_te, args):
         dynamic_ncols=True):
 
         for x,y in loader_tr:
-            x = x.to(device, non_blocking=True)
+            x = x.to(device, non_blocking=True).view(x.shape[0], -1)
             y = y.to(device, non_blocking=True)
-            x = x.view(x.shape[0], -1)
             loss = loss_fn(model(x), y)
             loss.backward()
             optimizer.step()
@@ -77,9 +76,8 @@ def noised_linear_probe(loader_tr, loader_te, args):
         dynamic_ncols=True):
 
         for x,y in loader_tr:
-            x = x.to(device, non_blocking=True)
+            x = x.to(device, non_blocking=True).view(x.shape[0], -1)
             y = y.to(device, non_blocking=True)
-            x = x.view(x.shape[0], -1)
             nx = Utils.with_noise(x)
             loss = loss_fn(probe(nx), y)
             loss.backward()
@@ -101,9 +99,8 @@ def plain_linear_probe(loader_tr, loader_te, args):
         dynamic_ncols=True):
 
         for x,y in loader_tr:
-            x = x.to(device, non_blocking=True)
+            x = x.to(device, non_blocking=True).view(x.shape[0], -1)
             y = y.to(device, non_blocking=True)
-            x = x.view(x.shape[0], -1)
             loss = loss_fn(probe(x), y)
             loss.backward()
             optimizer.step()
