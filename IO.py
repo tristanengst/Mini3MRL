@@ -1,7 +1,7 @@
 import argparse
 import os
 
-def data_type(s):
+def dataset_spec_type(s):
     datasets = ["mnist", "cifar10"]
     if os.path.exists(s) or s.startswith(f"$SLURM_TMPDIR") or s in datasets:
         return s
@@ -20,7 +20,7 @@ def parser_with_default_args(P):
     P.add_argument("--uid", default=None,
         help="WandB UID")
     P.add_argument("--script", default=None,
-        help="Name of the script being run")
+        help="Name of the script being run. Individual scripts should set this if not None.")
     P.add_argument("--job_id", type=str, default=None,
         help="SLURM job ID")
     P.add_argument("--num_workers", default=20, type=int,
@@ -39,10 +39,10 @@ def parser_with_logging_args(P):
     return P
 
 def parser_with_data_args(P):
-    P.add_argument("--data_tr", required=True,
-        help="Training data")
-    P.add_argument("--data_val", default=None, required=False,
-        help="Validation data. If not specified")
+    P.add_argument("--data_tr", required=True, type=dataset_spec_type,
+        help="Training data. 'mnist', 'cifar10', or path to a file.")
+    P.add_argument("--data_val", default=None, required=False, type=dataset_spec_type,
+        help="Validation data. If not specified, uses the data excluded through N_WAY and N_SHOT settings.")
     P.add_argument("--n_shot", default=-1, type=int,
         help="Number of examples per class. -1 for all")
     P.add_argument("--n_way", default=-1, type=int,
@@ -50,12 +50,12 @@ def parser_with_data_args(P):
     return P
 
 def parser_with_training_args(P):
-    P.add_argument("--lr", default=1e-3, type=float,
-        help="Learning rate")
-    P.add_argument("--scheduler", default="constant", choices=["step", "constant"],
-        help="Learning rate")
+    P.add_argument("--arch", choices=["mlp"], default="mlp",
+        help="Model architecture")
+    P.add_argument("--lrs", default=[0, 1e-3], type=float, nargs="*",
+        help="Learning rates. Even indices give step indices, odd indices give the learning rate to start at the step given at the prior index.")
     P.add_argument("--epochs",type=int, default=1000,
-        help="Number of epochs")
+        help="Number of epochs/samplings")
     P.add_argument("--bs",type=int, default=1000,
         help="Batch size")
     P.add_argument("--std",type=float, default=.8,
@@ -63,10 +63,10 @@ def parser_with_training_args(P):
     return P
 
 def parser_with_probe_args(P):
-    P.add_argument("--probe_lr", default=1e-3, type=float,
-        help="Learning rate")
+    P.add_argument("--probe_lrs", default=[0, 1e-3], type=float, nargs="*",
+        help="Learning rates. Even indices give step indices, odd indices give the learning rate to start at the step given at the prior index.")
     P.add_argument("--probe_epochs",type=int, default=25,
-        help="Number of epochs")
+        help="Number of epochs for the probe")
     return P
 
 def parser_with_imle_args(P):

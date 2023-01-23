@@ -2,3 +2,7 @@ data
 __pycache__
 wandb
 *.png
+*mnist*
+*MNIST*
+*cifar10*
+*cifar-10*

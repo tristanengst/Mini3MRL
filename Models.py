@@ -3,49 +3,71 @@ import torch
 import torch.nn as nn
 from tqdm import tqdm as tqdm
 
+def get_arch(args, imle=False):
+    """Returns the model architecture specified in argparse Namespace [args].
+    [imle] toggles whether the model should be created for IMLE or not.
+    """
+    if args.arch == "mlp" and imle:
+        return IMLE_DAE_MLP(args)
+    elif args.arch == "mlp" and not imle:
+        return DAE_MLP(args)
+    # Add other architectures here
+    else:
+        raise NotImplementedError()
+
 class MLPEncoder(nn.Module):
 
-    def __init__(self, in_dim=784, h_dim=1024, out_dim=64):
+    def __init__(self, in_dim=784, h_dim=1024, out_dim=64, **kwargs):
         super(MLPEncoder, self).__init__()
         self.lin1 = nn.Linear(in_dim, h_dim)
         self.relu = nn.ReLU(True)
         self.lin2 = nn.Linear(h_dim, out_dim)
+
+        self.out_dim = out_dim
     
     def forward(self, x):
         x = torch.flatten(x, start_dim=1)
         fx = self.lin1(x)
         fx = self.relu(fx)
         fx = self.lin2(fx)
+        fx = self.relu(fx) # This causes problems
         return fx
 
-class DAE(nn.Module):
+class MLPDecoder(nn.Module):
 
-    def __init__(self):
-        super(DAE, self).__init__()
-        self.encoder = MLPEncoder()
-        self.decoder = nn.Sequential(
-            nn.Linear(64, 1024),
-            nn.ReLU(True),
-            nn.Linear(1024, 28 * 28),
-            nn.Sigmoid())
+    def __init__(self, in_dim=64, h_dim=1024, out_dim=784, **kwargs):
+        super(MLPDecoder, self).__init__()
+        self.lin1 = nn.Linear(in_dim, h_dim)
+        self.relu = nn.ReLU(True)
+        self.lin2 = nn.Linear(h_dim, out_dim)
+        self.sigmoid = nn.Sigmoid() # Targets are expected to be in [0, 1]
+
+    def forward(self, x):
+        fx = self.lin1(x)
+        fx = self.relu(fx)
+        fx = self.lin2(fx)
+        fx = self.sigmoid(fx)
+        return fx
+
+class DAE_MLP(nn.Module):
+
+    def __init__(self, args):
+        super(DAE_MLP, self).__init__()
+        self.encoder = MLPEncoder(**vars(args))
+        self.decoder = MLPDecoder(**vars(args))
     
     def forward(self, x):
-        fx = self.encoder(x)
-        fx = self.decoder(fx)
-        return fx
+        in_shape = x.shape
+        return self.decoder(self.encoder(x)).view(*in_shape)
 
-class IMLE_DAE(nn.Module):
+class IMLE_DAE_MLP(nn.Module):
 
-    def __init__(self):
-        super(IMLE_DAE, self).__init__()
+    def __init__(self, args):
+        super(IMLE_DAE_MLP, self).__init__()
         self.code_dim = 512
-        self.encoder = MLPEncoder()
-        self.decoder = nn.Sequential(
-            nn.Linear(64, 1024),
-            nn.ReLU(True),
-            nn.Linear(1024, 28 * 28),
-            nn.Sigmoid())
-        self.ada_in = AdaIN(64)
+        self.encoder = MLPEncoder(**vars(args))
+        self.decoder = MLPDecoder(**vars(args))
+        self.ada_in = AdaIN(self.encoder.out_dim)
 
         self.code_dim = 512
 
@@ -66,6 +88,7 @@ class IMLE_DAE(nn.Module):
             return z
     
     def forward(self, x, z=None, num_z=1, seed=None):
+        in_shape = x.shape
         if z is None:
             z = self.get_codes(len(x) * num_z,
                 device=x.device,
@@ -74,7 +97,7 @@ class IMLE_DAE(nn.Module):
         fx = self.encoder(x)
         fx = self.ada_in(fx, z)
         fx = self.decoder(fx)
-        return fx
+        return fx.view(*in_shape)
 
 class AdaIN(nn.Module):
     """AdaIN adapted for a transformer. Expects a BSxNPxC batch of images, where
@@ -99,9 +122,6 @@ class AdaIN(nn.Module):
             act_type=act_type)))
 
         self.model = nn.Sequential(OrderedDict(layers))
-
-        
-    def get_latent_spec(self, x): return (512,)
 
     def forward(self, x, z):
         """
