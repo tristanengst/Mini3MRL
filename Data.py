@@ -16,7 +16,6 @@ def get_dataset(s, transform=None, split=None):
     if s == "cifar10":
         return CIFAR10(root="cifar10", train=train, download=True, transform=transform)
     elif s == "mnist":
-        print("-----------------", train)
         return MNIST(root="mnist", train=train, download=True, transform=transform)
     else:
         return ImageFolder(s, transform=transform)

@@ -34,7 +34,7 @@ def parser_with_default_args(P):
 def parser_with_logging_args(P):
     P.add_argument("--eval_iter", default=1, type=int,
         help="Evaluate every EVAL_ITER epochs/samplings.")
-    P.add_argument("--save_iter", default=-1, type=int,
+    P.add_argument("--save_iter", default=0, type=int,
         help="Save every SAVE_ITER epochs/samplings.")
     return P
 

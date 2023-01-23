@@ -18,10 +18,11 @@ import Utils
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-def imle_model_folder(args, make_folder=True):
+def imle_model_folder(args, make_folder=False):
+    data_str = Data.dataset_pretty_name(args.data_tr)
     suffix = "" if args.suffix is None else f"-{args.suffix}"
     job_id = "" if args.job_id is None else f"-{args.job_id}"
-    folder = f"{args.save_folder}/imle_models/{args.script}-bs{args.bs}-epochs{args.epochs}-ipe{args.ipe}-lr{args.bs}-ns{args.ns}-nshot{args.n_way}-nway{args.n_shot}-std{args.std}-seed{args.seed}-{args.uid}{job_id}{suffix}"
+    folder = f"{args.save_folder}/models_{args.script}/{data_str}-bs{args.bs}-epochs{args.epochs}-ipe{args.ipe}-lr{args.bs}-ns{args.ns}-nshot{args.n_way}-nway{args.n_shot}-std{args.std}-seed{args.seed}-{args.uid}{job_id}{suffix}"
 
     if make_folder:
         Utils.conditional_make_folder(folder)
@@ -34,15 +35,14 @@ def evaluate(model, loader_tr, loader_val, scheduler, args, cur_step):
     total_tr, total_val = 0, 0
     with torch.no_grad():
         for x_tr,_ in loader_tr:
-            x_tr = x_tr.to(device, non_blocking=True).view(x_tr.shape[0], -1)
+            x_tr = x_tr.to(device, non_blocking=True)
             nx_tr = Utils.with_noise(x_tr, std=args.std)
             fxn_tr = model(nx_tr)
-            tqdm.write(f"------------{fxn_tr.shape} {x_tr.shape}")
             loss_tr += eval_loss_fn(fxn_tr, x_tr)
             total_tr += len(x_tr)
 
         for x_val,_ in loader_val:
-            x_val = x_val.to(device, non_blocking=True).view(x.shape[0], -1)
+            x_val = x_val.to(device, non_blocking=True)
             nx_val = Utils.with_noise(x_val, std=args.std, seed=args.seed)
             fxn_val = model(nx_val)
             loss_val += eval_loss_fn(fxn_val, x_val)
@@ -52,14 +52,17 @@ def evaluate(model, loader_tr, loader_val, scheduler, args, cur_step):
     loss_val = loss_val.item() / total_val
 
     acc_val = LinearProbe.linear_probe(model, loader_tr, loader_val, args)
-    tqdm.write(f"Step {cur_step}/{len(loader_tr) * args.ipe * args.epochs} - lr={scheduler.get_last_lr()[0]:.5e} loss/tr={loss_tr:.5f} loss/te={loss_val:.5f} acc/te={acc_val:.5f}")
+    tqdm.write(f"Step {cur_step}/{len(loader_tr) * args.ipe * args.epochs} - lr={scheduler.get_lr():.5e} loss/tr={loss_tr:.5f} loss/te={loss_val:.5f} acc/te={acc_val:.5f}")
+
+
+    image_shape = x_val.shape[1:]
 
     # Create an image to visualize how the model is doing
     image_save_folder = f"{imle_model_folder(args, make_folder=True)}/images"
     Utils.conditional_make_folder(image_save_folder)
     image_path_tr = f"{image_save_folder}/{cur_step}_tr.png"
     with torch.no_grad():
-        fxn_tr = model(nx_tr[:8], num_z=6, seed=args.seed).view(8, 6, 784)
+        fxn_tr = model(nx_tr[:8], num_z=6, seed=args.seed).view(8, 6, *image_shape)
     image = torch.cat([x_tr[:8].unsqueeze(1), nx_tr[:8].unsqueeze(1), fxn_tr], dim=1)
     Utils.images_to_pil_image(image).save(image_path_tr)
 
@@ -67,7 +70,7 @@ def evaluate(model, loader_tr, loader_val, scheduler, args, cur_step):
     Utils.conditional_make_folder(image_save_folder)
     image_path_val = f"{image_save_folder}/{cur_step}_val.png"
     with torch.no_grad():
-        fxn_val = model(nx_val[:8], num_z=6, seed=args.seed).view(8, 6, 784)
+        fxn_val = model(nx_val[:8], num_z=6, seed=args.seed).view(8, 6, *image_shape)
     image = torch.cat([x_val[:8].unsqueeze(1), nx_val[:8].unsqueeze(1), fxn_val], dim=1)
     Utils.images_to_pil_image(image).save(image_path_val)
 
@@ -75,7 +78,7 @@ def evaluate(model, loader_tr, loader_val, scheduler, args, cur_step):
         "acc/te": acc_val,
         "loss/te": loss_val,
         "loss/tr": loss_tr,
-        "lr": scheduler.get_last_lr()[0],
+        "lr": scheduler.get_lr(),
         "train_step": cur_step,
         "images/te": wandb.Image(image_path_val),
         "images/tr": wandb.Image(image_path_tr)
@@ -109,7 +112,7 @@ class ImageLatentDataset(Dataset):
         """
         with torch.no_grad():
             least_losses = torch.ones(len(dataset), device=device) * float("inf")
-            best_latents = model.get_codes(len(dataset),)
+            best_latents = Utils.de_dataparallel(model).get_codes(len(dataset), device=device)
             images = []
             noised_images = []
 
@@ -134,7 +137,7 @@ class ImageLatentDataset(Dataset):
                     leave=False,
                     dynamic_ncols=True):
 
-                    z = model.get_codes(len(xn), device=xn.device)
+                    z = Utils.de_dataparallel(model).get_codes(len(xn), device=xn.device)
                     fxn = model(xn, z)
                     losses = loss_fn(fxn, x)
                     losses = torch.sum(losses, dim=1)
@@ -160,61 +163,64 @@ def get_args(args=None):
     P = IO.parser_with_imle_args(P)
 
     args = P.parse_args() if args is None else P.parse_args(args)
-    args.uid = wandb.util.generate_id() if args.wandb is None else args.wandb
-    args.script = "IMLE" if args.script is None else args.script
+    args.uid = wandb.util.generate_id() if args.uid is None else args.uid
+    args.script = "imle" if args.script is None else args.script
+    args.lrs = Utils.StepScheduler.process_lrs(args.lrs)
+    args.probe_lrs = Utils.StepScheduler.process_lrs(args.probe_lrs)
     return args
 
 if __name__ == "__main__":
     args = get_args()
-    tqdm.write(str(args))
-    Utils.set_seed(args.seed)
 
     if args.resume is None:
-        model = Models.IMLE_DAE().to(device)
-        optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=1e-5)
+        model = Models.get_model(args, imle=True)
         last_epoch = -1
     else:
         states = torch.load(args.resume)
-        model = Models.IMLE_DAE()
+        args = argparse.Namespace(**vars(states["args"]) | vars(args))
+        model = Models.get_model(args, imle=True)
         model.load_state_dict(states["model"])
         model = model.to(device)
         last_epoch = states["epoch"]
 
-        # We probably want to discard the old optimizer state
-        optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=1e-5)
-
-        unmatched_args = ["lr", "resume"]
-        for k,v in vars(args).items():
-            if not k in vars(states["args"]):
-                tqdm.write(f"Argument --{k} not in resumed-from arguments")
-            elif not v == vars(states["args"])[k] and not k in unmatched_args:
-                tqdm.write(f"Argument --{k} was {v} in current arguments but {vars(state['args'][k])} in resumed-from arguments")
-                raise ValueError()
-            else:
-                continue
-
+    Utils.set_seed(args.seed)
     wandb.init(anonymous="allow", id=args.uid, config=args,
-        mode=args.wandb, project="Mini3MRL",
+        mode=args.wandb, project="Mini3MRL", entity="apex-lab",
         name=os.path.basename(imle_model_folder(args)))
 
-    tqdm.write(f"Will save to {imle_model_folder(args)}")
+    # We probably want to discard the old optimizer state
+    model = nn.DataParallel(model, device_ids=args.gpus).to(device)
+    optimizer = torch.optim.Adam(model.parameters(),
+        lr=1, # Reset by the scheduler
+        weight_decay=1e-5)
+    scheduler = Utils.StepScheduler(optimizer, args.lrs)
+    loss_fn = nn.BCELoss()
 
-    # Get DataLoaders over the training and testing data
-    data_tr = Data.get_dataset(args.data_tr, split="train", transform=Utils.transforms_mnist)
-    data_tr = Data.get_fewshot_dataset(data_tr, n_way=args.n_way, n_shot=args.n_shot, seed=args.seed)
-
+    # Get DataLoaders over the training and validation data. In this context,
+    # validation data is data we use for validating the linear probe, ie. the
+    # linear probe and model are trained on the training data.
     if args.data_val is None:
-        data_val = Data.ImageFolderSubset.complement(data_tr)
+        data_tr = Data.get_dataset(args.data_tr, split="train", transform=Data.get_transforms_tr(args))
+        data_tr = Data.get_fewshot_dataset(data_tr, n_way=args.n_way, n_shot=args.n_shot, seed=args.seed)
+        data_val = Data.ImageFolderSubset.complement(data_tr, replace_transform=Data.get_transforms_te(args))
     else:
-        raise NotImplementedError()
+        data_tr = Data.get_dataset(args.data_tr, split="train", transform=Data.get_transforms_tr(args))
+        data_tr = Data.get_fewshot_dataset(data_tr, n_way=args.n_way, n_shot=args.n_shot, seed=args.seed)
+        data_val = Data.get_dataset(args.data_val, split="test", transform=Data.get_transforms_te(args))
+        data_val = Data.get_fewshot_dataset(data_val, n_way=args.n_way, n_shot=args.n_shot, seed=args.seed)
 
+    args.n_way = data_tr.n_way
+    args.n_shot = data_tr.n_shot
+        
     tqdm.write(f"TRAINING DATA\n{data_tr}")
     tqdm.write(f"VALIDATION DATA\n{data_val}")
+    
     loader_tr = DataLoader(data_tr,
         batch_size=args.bs,
         shuffle=True,
         num_workers=args.num_workers,
-        prefetch_factor=2,
+        persistent_workers=True,
+        prefetch_factor=8,
         pin_memory=True)
     loader_val = DataLoader(data_val,
         batch_size=args.bs,
@@ -222,23 +228,11 @@ if __name__ == "__main__":
         persistent_workers=True,
         pin_memory=True)
     
-    
-    loss_fn = nn.BCELoss()
-    if args.scheduler == "step":
-        scheduler = torch.optim.lr_scheduler.StepLR(optimizer,
-            step_size=args.epochs // 5,
-            gamma=.3,
-            last_epoch=last_epoch)
-    elif args.scheduler == "constant":
-        scheduler = torch.optim.lr_scheduler.StepLR(optimizer,
-            step_size=args.epochs,
-            gamma=1,
-            last_epoch=last_epoch)
-    else:
-        raise NotImplementedError()
+    tqdm.write(f"----------\n{args}\n----------")
+    tqdm.write(f"Will save to {imle_model_folder(args)}")
 
     cur_step = (last_epoch + 1) * args.ipe * len(data_tr) // args.bs
-    num_steps = args.ipe * len(data_tr) * (args.epochs-last_epoch+1) // args.bs
+    num_steps = args.ipe * len(data_tr) // args.bs
     _ = evaluate(model, loader_tr, loader_val, scheduler, args, cur_step)
     for epoch in tqdm(range(last_epoch + 1, args.epochs),
         dynamic_ncols=True,
@@ -253,6 +247,7 @@ if __name__ == "__main__":
             shuffle=True,
             pin_memory=True,
             batch_size=args.bs,
+            persistent_workers=True,
             num_workers=args.num_workers)
         chain_loader = itertools.chain(*[loader] * args.ipe)
         chain_loader_len = len(loader) * args.ipe
@@ -277,17 +272,18 @@ if __name__ == "__main__":
         if epoch % args.eval_iter == 0 or epoch == args.epochs - 1:
             _ = evaluate(model, loader_tr, loader_val, scheduler, args, cur_step)
         
-        if epoch % args.save_iter == 0 and not args.save_iter == 0:
-            state_dict = {"model": model.cpu().state_dict(),
+        if not args.save_iter == 0 and epoch % args.save_iter == 0:
+            state_dict = {"model": Utils.de_dataparallel(model).cpu().state_dict(),
                 "optimizer": optimizer.state_dict(),
                 "epoch": epoch,
                 "args": args,
             }
             torch.save(state_dict, imle_model_folder(args, make_folder=True))
+            model.to(device)
         elif args.save_iter == -1:
             raise NotImplementedError()
     
-        scheduler.step()
+        scheduler.step(epoch)
     
         
 

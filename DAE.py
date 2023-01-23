@@ -89,6 +89,7 @@ def get_args(args=None):
     args.uid = wandb.util.generate_id() if args.uid is None else args.uid
     args.script = "dae" if args.script is None else args.script
     args.lrs = Utils.StepScheduler.process_lrs(args.lrs)
+    args.probe_lrs = Utils.StepScheduler.process_lrs(args.probe_lrs)
     return args
 
 if __name__ == "__main__":
@@ -133,7 +134,7 @@ if __name__ == "__main__":
         pin_memory=True)
     
     # Get the model and associated neural machinery.
-    model = nn.DataParallel(Models.get_arch(args, imle=False),
+    model = nn.DataParallel(Models.get_model(args, imle=False),
         device_ids=args.gpus).to(device)
     optimizer = torch.optim.Adam(model.parameters(),
         lr=1, # Reset by the scheduler
@@ -168,7 +169,7 @@ if __name__ == "__main__":
         if args.eval_iter > 0 and (epoch % args.eval_iter == 0 or epoch == args.epochs - 1):
             _ = evaluate(model, loader_tr, loader_val, scheduler, args, cur_step)
     
-        scheduler.step()
+        scheduler.step(epoch)
         
 
 

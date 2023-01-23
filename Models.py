@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 from tqdm import tqdm as tqdm
 
-def get_arch(args, imle=False):
+def get_model(args, imle=False):
     """Returns the model architecture specified in argparse Namespace [args].
     [imle] toggles whether the model should be created for IMLE or not.
     """
@@ -88,7 +88,7 @@ class IMLE_DAE_MLP(nn.Module):
             return z
     
     def forward(self, x, z=None, num_z=1, seed=None):
-        in_shape = x.shape
+        in_shape = x.shape[1:]
         if z is None:
             z = self.get_codes(len(x) * num_z,
                 device=x.device,
@@ -97,7 +97,7 @@ class IMLE_DAE_MLP(nn.Module):
         fx = self.encoder(x)
         fx = self.ada_in(fx, z)
         fx = self.decoder(fx)
-        return fx.view(*in_shape)
+        return fx.view(len(z), *in_shape)
 
 class AdaIN(nn.Module):
     """AdaIN adapted for a transformer. Expects a BSxNPxC batch of images, where
