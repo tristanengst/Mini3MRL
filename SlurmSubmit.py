@@ -75,13 +75,13 @@ if __name__ == "__main__":
     script = f"{file_move_command}\npython {slurm_args.script} {unparse_args(args)} --job_id $SLURM_ARRAY_JOB_ID --num_workers {num_cpus}"
 
     with open("slurm/slurm_template.txt", "r") as f:
-            slurm_template = f.read()
-    slurm_template.replace("ACCOUNT", slurm_args.account)
-    slurm_template.replace("TIME", slurm_args.time)
-    slurm_template.replace("NUM_GPUS", str(num_gpus))
-    slurm_template.replace("NUM_CPUS", str(num_cpus))
-    slurm_template.replace("NAME", name)
-    slurm_template.replace("SCRIPT", script)
+        slurm_template = f.read()
+    slurm_template = slurm_template.replace("ACCOUNT", slurm_args.account)
+    slurm_template = slurm_template.replace("TIME", slurm_args.time)
+    slurm_template = slurm_template.replace("NUM_GPUS", str(num_gpus))
+    slurm_template = slurm_template.replace("NUM_CPUS", str(num_cpus))
+    slurm_template = slurm_template.replace("NAME", name)
+    slurm_template = slurm_template.replace("SCRIPT", script)
 
     slurm_script = f"slurm/{name}.sh"
     with open(slurm_script, "w+") as f:
