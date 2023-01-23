@@ -208,9 +208,6 @@ if __name__ == "__main__":
         data_tr = Data.get_fewshot_dataset(data_tr, n_way=args.n_way, n_shot=args.n_shot, seed=args.seed)
         data_val = Data.get_dataset(args.data_val, split="test", transform=Data.get_transforms_te(args))
         data_val = Data.get_fewshot_dataset(data_val, n_way=args.n_way, n_shot=args.n_shot, seed=args.seed)
-
-    args.n_way = data_tr.n_way
-    args.n_shot = data_tr.n_shot
         
     tqdm.write(f"TRAINING DATA\n{data_tr}")
     tqdm.write(f"VALIDATION DATA\n{data_val}")

@@ -1,5 +1,7 @@
 import argparse
 import os
+from tqdm import tqdm
+
 import DAE
 import IMLE_DAE
 
@@ -16,6 +18,7 @@ def unparse_args(args):
         else:
             s += f" --{k} {v}"
     return s
+
 
 def get_args_with_data_on_node(args, arg_names_to_move, out_dir="$SLURM_TMPDIR"):
     """Returns an (args, cmd) tuple where [args] is [args] modified to have the
@@ -35,7 +38,7 @@ def get_args_with_data_on_node(args, arg_names_to_move, out_dir="$SLURM_TMPDIR")
 
 def get_slurm_args():
     P = argparse.ArgumentParser()
-    P.add_argument("script", required=True,
+    P.add_argument("script",
         help="Script to run")
     P.add_argument("--time", default="1:00:00", type=str,
         help="String giving time for the SLURM job")
@@ -52,22 +55,24 @@ def get_slurm_args():
 if __name__ == "__main__":
     slurm_args, unparsed_args = get_slurm_args()
 
-    if args.script == "DAE.py":
+    if slurm_args.script == "DAE.py":
         args = DAE.get_args(unparsed_args)
-        name = os.path.basename(DAE.imle_model_folder(args))
-        args, file_move_cmd = get_args_with_data_on_node()
+        name = os.path.basename(DAE.dae_model_folder(args))
+        args, file_move_command = get_args_with_data_on_node(args,
+            arg_names_to_move=["data_tr", "data_val"])
         num_gpus = len(args.gpus)
         num_cpus = min(24, max(1, num_gpus) * 12)
-    elif args.script == "IMLE_DAE.py"
+    elif slurm_args.script == "IMLE_DAE.py":
         args = IMLE_DAE.get_args(unparsed_args)
-        args, file_move_cmd = get_args_with_data_on_node()
+        args, file_move_command = get_args_with_data_on_node(args,
+            arg_names_to_move=["data_tr", "data_val"])
         name = os.path.basename(IMLE_DAE.imle_model_folder(args))
         num_gpus = len(args.gpus)
         num_cpus = min(24, max(1, num_gpus) * 12)
     else:
         raise NotImplementedError()
 
-    script = f"{file_move_cmd}\npython {submission_args.script} {unparse_args(args)} --job_id $SLURM_ARRAY_JOB_ID --num_workers {num_cpus}"
+    script = f"{file_move_command}\npython {slurm_args.script} {unparse_args(args)} --job_id $SLURM_ARRAY_JOB_ID --num_workers {num_cpus}"
 
     with open("slurm/slurm_template.txt", "r") as f:
             slurm_template = f.read()
@@ -80,9 +85,9 @@ if __name__ == "__main__":
 
     slurm_script = f"slurm/{name}.sh"
     with open(slurm_script, "w+") as f:
-        f.write(template)
+        f.write(slurm_template)
 
-    tqdm.write(f"File move command: {file_move_cmd}")
+    tqdm.write(f"File move command: {file_move_command}")
     tqdm.write(f"Script:\n{script}")
     tqdm.write(f"SLURM submission script written to {slurm_script}")
     tqdm.write(f"Outputs will write to job_results/{name}.txt")

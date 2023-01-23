@@ -72,6 +72,9 @@ def get_fewshot_dataset(dataset, n_way=-1, n_shot=-1, classes=None, seed=0,
     allow_fewer_shots   -- if [dataset] doesn't have all the [n_shots] for a
                                 class, use less than [n_shots]
     """
+    n_shot = -1 if n_shot == "all" else n_shot
+    n_way = -1 if n_way == "all" else n_way
+    
     if classes == -1 and n_shot == -1:
         return dataset
     else:

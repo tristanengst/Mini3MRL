@@ -8,6 +8,14 @@ def dataset_spec_type(s):
     else:
         raise FileNotFoundError(s)
 
+def int_or_all(s):
+    if s.isdigit():
+        return int(s)
+    elif s == "all":
+        return s
+    else:
+        raise argparse.ArgumentTypeError(f"Must be int or 'all'")
+
 def parser_with_default_args(P):
     P.add_argument("--wandb", default="disabled", choices=["disabled", "online", "offline"],
         help="WandB mode")
@@ -43,10 +51,10 @@ def parser_with_data_args(P):
         help="Training data. 'mnist', 'cifar10', or path to a file.")
     P.add_argument("--data_val", default=None, required=False, type=dataset_spec_type,
         help="Validation data. If not specified, uses the data excluded through N_WAY and N_SHOT settings.")
-    P.add_argument("--n_shot", default=-1, type=int,
-        help="Number of examples per class. -1 for all")
-    P.add_argument("--n_way", default=-1, type=int,
-        help="Number of classes. -1 for all")
+    P.add_argument("--n_shot", default=-1, type=int_or_all,
+        help="Number of examples per class. -1 or 'all' for all")
+    P.add_argument("--n_way", default=-1, type=int_or_all,
+        help="Number of classes. -1 or 'all' for all")
     return P
 
 def parser_with_training_args(P):
