@@ -51,9 +51,9 @@ def parser_with_data_args(P):
         help="Training data. 'mnist', 'cifar10', or path to a file.")
     P.add_argument("--data_val", default=None, required=False, type=dataset_spec_type,
         help="Validation data. If not specified, uses the data excluded through N_WAY and N_SHOT settings.")
-    P.add_argument("--n_shot", default=-1, type=int_or_all,
+    P.add_argument("--n_shot", default="all", type=int_or_all,
         help="Number of examples per class. -1 or 'all' for all")
-    P.add_argument("--n_way", default=-1, type=int_or_all,
+    P.add_argument("--n_way", default="all", type=int_or_all,
         help="Number of classes. -1 or 'all' for all")
     return P
 

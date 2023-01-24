@@ -4,10 +4,10 @@
 
 #SBATCH --time=TIME
 #SBATCH --account=ACCOUNT
-#SBATCH --mem=100G
+#SBATCH --mem=MEM
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=NUM_CPUS
-#SBATCH --gres=gpu:a100:NUM_GPUS
+#SBATCH --gres=gpu:GPU_TYPE:NUM_GPUS
 
 #SBATCH --job-name=NAME
 #SBATCH --output=job_results/%x_%a.txt
@@ -26,10 +26,12 @@ pwd
 hostname
 date
 
-echo "Starting job number $SLURM_ARRAY_JOB_ID"
+echo "Starting job number $SLURM_JOB_ID"
 source ~/.bashrc
-conda activate py3103MRL
+PYTHON_ENV_STR
 export PYTHONUNBUFFERED=1
+
+echo "SCRIPT"
 
 SCRIPT
 
