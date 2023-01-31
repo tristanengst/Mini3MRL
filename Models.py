@@ -35,14 +35,14 @@ class MLPEncoder(nn.Module):
         fx = self.lin1(x)
         fx = self.relu(fx)
         fx = self.lin2(fx)
-        fx = self.out_act(fx) # This causes problems
+        fx = self.out_act(fx) # It's better for this to be LeakyReLU
         return fx
 
 class MLPDecoder(nn.Module):
 
-    def __init__(self, in_dim=64, h_dim=1024, out_dim=784, **kwargs):
+    def __init__(self, feat_dim=64, h_dim=1024, out_dim=784, **kwargs):
         super(MLPDecoder, self).__init__()
-        self.lin1 = nn.Linear(in_dim, h_dim)
+        self.lin1 = nn.Linear(feat_dim, h_dim)
         self.relu = nn.ReLU(True)
         self.lin2 = nn.Linear(h_dim, out_dim)
         self.sigmoid = nn.Sigmoid() # Targets are expected to be in [0, 1]
