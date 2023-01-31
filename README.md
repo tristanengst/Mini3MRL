@@ -7,7 +7,7 @@ A lot of what's here is taken from [this repo](https://github.com/ReyhaneAskari/
 In a conda environment:
 ```
 conda install pytorch torchvision pytorch-cuda=11.7 -c pytorch -c nvidia
-conda install -c conda-forge wandb tqdm
+conda install -c conda-forge wandb tqdm scikit-learn matplotlib
 ```
 
 ## Usage
