@@ -33,7 +33,7 @@ def parser_with_default_args(P):
         help="SLURM job ID")
     P.add_argument("--num_workers", default=20, type=int,
         help="Number of DataLoader workers")
-    P.add_argument("--gpus", type=int, nargs="+", default=[0],
+    P.add_argument("--gpus", type=int, nargs="+", default=[0, 1],
         help="List of GPU IDs")
     P.add_argument("--resume", type=str, default=None,
         help="Path to file to resume from")
@@ -60,6 +60,10 @@ def parser_with_data_args(P):
 def parser_with_training_args(P):
     P.add_argument("--arch", choices=["mlp"], default="mlp",
         help="Model architecture")
+    P.add_argument("--feat_dim", type=int, default=64,
+        help="Dimensionality of the features extracted by the model")
+    P.add_argument("--leaky_relu", type=int, default=0, choices=[0, 1],
+        help="Use LeakyReLU instead of ReLU")
     P.add_argument("--lrs", default=[0, 1e-3], type=float, nargs="*",
         help="Learning rates. Even indices give step indices, odd indices give the learning rate to start at the step given at the prior index.")
     P.add_argument("--epochs",type=int, default=1000,
@@ -75,6 +79,16 @@ def parser_with_probe_args(P):
         help="Learning rates. Even indices give step indices, odd indices give the learning rate to start at the step given at the prior index.")
     P.add_argument("--probe_epochs",type=int, default=25,
         help="Number of epochs for the probe")
+    P.add_argument("--probe_linear", choices=[0, 1], default=0, type=int,
+        help="Whether to include a linear probe")
+    P.add_argument("--probe_mlp", choices=[0, 1], default=0, type=int,
+        help="Whether the probe should include an MLP")
+    P.add_argument("--probe_svm", choices=[0, 1], default=0, type=int,
+        help="Whether the probe should include SVM")
+    P.add_argument("--probe_knn", choices=[0, 1], default=0, type=int,
+        help="Whether the probe should include KNN")
+    P.add_argument("--probe_include_codes", choices=[0, 1, 2], default=0, type=int,
+        help="Whether the probe should include noise. 2 does it both ways")
     return P
 
 def parser_with_imle_args(P):

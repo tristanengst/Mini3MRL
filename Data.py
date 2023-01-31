@@ -8,18 +8,32 @@ import torchvision.transforms as transforms
 from tqdm import tqdm
 import Utils
 
-def get_dataset(s, transform=None, split=None):
-    """Returns the dataset given by string [s], a path to an ImageFolder or one
-    of 'mnist' or 'cifar10'. In these two cases, [split] determines what split
-    of the data is returned.
-    """
-    train = (not split == "test")
-    if s == "cifar10":
-        return CIFAR10(root="cifar10", train=train, download=True, transform=transform)
-    elif s == "mnist":
-        return MNIST(root="mnist", train=train, download=True, transform=transform)
+def get_data_from_args(args):
+    """Returns a (data_tr, data_val) tuple given argparse Namespace [args]."""
+    def get_dataset(s, transform=None, split=None):
+        """Returns the dataset given by string [s], a path to an ImageFolder or
+        one of 'mnist' or 'cifar10'. In these two cases, [split] determines what
+        split of the data is returned.
+        """
+        train = (not split == "test")
+        if s == "cifar10":
+            return CIFAR10(root="cifar10", train=train, download=True, transform=transform)
+        elif s == "mnist":
+            return MNIST(root="mnist", train=train, download=True, transform=transform)
+        else:
+            return ImageFolder(s, transform=transform)
+
+    if args.data_val is None:
+        data_tr = get_dataset(args.data_tr, split="train", transform=get_transforms_tr(args))
+        data_tr = get_fewshot_dataset(data_tr, n_way=args.n_way, n_shot=args.n_shot, seed=args.seed)
+        data_val = ImageFolderSubset.complement(data_tr, replace_transform=get_transforms_te(args))
     else:
-        return ImageFolder(s, transform=transform)
+        data_tr = get_dataset(args.data_tr, split="train", transform=get_transforms_tr(args))
+        # data_tr = get_fewshot_dataset(data_tr, n_way=args.n_way, n_shot=args.n_shot, seed=args.seed)
+        data_val = get_dataset(args.data_val, split="test", transform=get_transforms_te(args))
+        # data_val = get_fewshot_dataset(data_val, n_way=args.n_way, n_shot=args.n_shot, seed=args.seed)
+    
+    return data_tr, data_val
 
 def dataset_pretty_name(data_str):
     """Returns the pretty name of a dataset given by [data_str], which may be a
@@ -34,9 +48,8 @@ def dataset_pretty_name(data_str):
         raise NotImplementedError()
 
 def min_max_normalization(tensor, min_value, max_value):
-    min_tensor = tensor.min()
+    min_tensor, max_tensor = torch.min(tensor), torch.max(tensor)
     tensor = (tensor - min_tensor)
-    max_tensor = tensor.max()
     tensor = tensor / max_tensor
     tensor = tensor * (max_value - min_value) + min_value
     return tensor
@@ -44,6 +57,7 @@ def min_max_normalization(tensor, min_value, max_value):
 def get_transforms_tr(args):
     if args.data_tr == "mnist":
         return transforms.Compose([
+            transforms.ToTensor(),
             transforms.Lambda(lambda x: min_max_normalization(x, 0, 1)),
             transforms.Lambda(lambda x: torch.round(x))
         ])
@@ -53,6 +67,7 @@ def get_transforms_tr(args):
 def get_transforms_te(args):
     if args.data_tr == "mnist":
         return transforms.Compose([
+            transforms.ToTensor(),
             transforms.Lambda(lambda x: min_max_normalization(x, 0, 1)),
             transforms.Lambda(lambda x: torch.round(x))
         ])

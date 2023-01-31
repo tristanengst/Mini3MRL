@@ -1,3 +1,4 @@
+import argparse
 from collections import OrderedDict, defaultdict
 import numpy as np
 import os
@@ -24,11 +25,49 @@ def with_noise(x, std=.8, seed=None):
         noise.normal_(generator=torch.Generator(x.device).manual_seed(seed))
         return x + noise * std
 
+def save_state(model, optimizer, args, epoch, folder):
+    """Saves [model], [optimizer], [args], and [epoch] along with Python, NumPy,
+    and PyTorch random seeds to 'folder/epoch.pt'.
+
+    Args:
+    model       -- model to be saved
+    optimizer   -- optimizer to be saved
+    args        -- argparse Namespace used to create run
+    epoch       -- epoch number to save with
+    folder      -- folder inside which to save everything
+    """
+    state_dict = {"model": de_dataparallel(model).cpu().state_dict(),
+        "optimizer": optimizer.state_dict(),
+        "epoch": epoch,
+        "args": args,
+        "seeds": {"random_seed": random.getstate(),
+            "torch_seed": torch.get_rng_state(),
+            "torch_cuda_seed": torch.cuda.get_rng_state(),
+            "numpy_seed": np.random.get_state()
+        }
+    }
+    _ = conditional_make_folder(folder)
+    torch.save(state_dict, f"{folder}/{epoch}.pt")
+    model.to(torch.device("cuda") if torch.cuda.is_available() else "cpu")
+
 def set_seed(seed):
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    np.random.seed(seed)
-    random.seed(seed)
+    """Seeds the program to use seed [seed]."""
+    if isinstance(seed, int):
+        random.seed(seed)
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed(seed)
+        tqdm.write(f"Set the NumPy, PyTorch, and Random modules seeds to {seed}")
+    elif isinstance(seed, dict):
+        random.setstate(seed["random_seed"])
+        np.random.set_state(seed["numpy_seed"])
+        torch.set_rng_state(seed["torch_seed"])
+        torch.cuda.set_rng_state(seed["torch_cuda_seed"])
+        tqdm.write(f"Reseeded program with old seed")
+    else:
+        raise ValueError(f"Seed should be int or contain resuming keys")
+
+    return seed
 
 def sample(select_from, k=-1, seed=0):
     """Returns [k] items sampled without replacement from [select_from] with
@@ -56,7 +95,12 @@ def flatten(xs):
         return [xs]
 
 def images_to_pil_image(images):
-    """Returns tensor datastructure [images] as a PIL image."""
+    """Returns tensor datastructure [images] as a PIL image that can thus be
+    easily saved.
+
+    This function should handle a myriad of inputs and thus pull complexity from
+    other places in the code inside of it.
+    """
     if images.shape[-1] == 784 and len(images.shape) == 3:
         images = images.view(images.shape[0], images.shape[1], 28, 28)
     elif images.shape[-1] == 784 and len(images.shape) == 2:
@@ -65,10 +109,12 @@ def images_to_pil_image(images):
         images = images.view(images.shape[0], 1, 28, 28)
     elif images.shape[-1] == 28 and len(images.shape) == 4:
         pass
+    elif images.shape[-1] == 28 and len(images.shape) == 5:
+        images = images.expand(*images.shape[:2], *(3,), *images.shape[-2:])
     elif isinstance(images, list):
         pass
     else:
-        raise NotImplementedError()
+        raise NotImplementedError(f"Image type {type(images)} not supported {f'shape {images.shape}' if isinstance(images, torch.Tensor) else ''}")
 
 
     fig, axs = plt.subplots(ncols=max([len(image_row) for image_row in images]),
@@ -78,6 +124,9 @@ def images_to_pil_image(images):
     for i,images_row in enumerate(images):
         for j,image in enumerate(images_row):
             image = torch.clip((image * 255), 0, 255).int().cpu()
+            
+            image = image.permute(-2, -1, 0) if image.shape[0] == 3 else image
+
             axs[i, j].imshow(np.asarray(image), cmap='Greys_r')
             axs[i, j].set(xticklabels=[], yticklabels=[], xticks=[], yticks=[])
 
@@ -92,6 +141,13 @@ def de_dataparallel(model):
         return model.module
     else:
         return model
+
+def sorted_namespace(args):
+    """Returns argparse Namespace [args] after sorting the args in it by key
+    value. The utility of this is printing.
+    """
+    d = vars(args)
+    return argparse.Namespace(**{k: d[k] for k in sorted(d.keys())})
 
 class StepScheduler:
     """StepLR but with easier control.

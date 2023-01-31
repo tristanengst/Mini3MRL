@@ -3,6 +3,10 @@ import torch
 import torch.nn as nn
 from tqdm import tqdm as tqdm
 
+import Utils
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 def get_model(args, imle=False):
     """Returns the model architecture specified in argparse Namespace [args].
     [imle] toggles whether the model should be created for IMLE or not.
@@ -17,20 +21,21 @@ def get_model(args, imle=False):
 
 class MLPEncoder(nn.Module):
 
-    def __init__(self, in_dim=784, h_dim=1024, out_dim=64, **kwargs):
+    def __init__(self, in_dim=784, h_dim=1024, feat_dim=64, **kwargs):
         super(MLPEncoder, self).__init__()
         self.lin1 = nn.Linear(in_dim, h_dim)
         self.relu = nn.ReLU(True)
-        self.lin2 = nn.Linear(h_dim, out_dim)
+        self.lin2 = nn.Linear(h_dim, feat_dim)
+        self.feat_dim = feat_dim
 
-        self.out_dim = out_dim
+        self.out_act = nn.ReLU(True) if not kwargs["leaky_relu"] else nn.LeakyReLU(negative_slope=.2)
     
     def forward(self, x):
         x = torch.flatten(x, start_dim=1)
         fx = self.lin1(x)
         fx = self.relu(fx)
         fx = self.lin2(fx)
-        fx = self.relu(fx) # This causes problems
+        fx = self.out_act(fx) # This causes problems
         return fx
 
 class MLPDecoder(nn.Module):
@@ -67,9 +72,7 @@ class IMLE_DAE_MLP(nn.Module):
         self.code_dim = 512
         self.encoder = MLPEncoder(**vars(args))
         self.decoder = MLPDecoder(**vars(args))
-        self.ada_in = AdaIN(self.encoder.out_dim)
-
-        self.code_dim = 512
+        self.ada_in = AdaIN(self.encoder.feat_dim)
 
     def get_codes(self, bs, device="cpu", seed=None):
         """Returns [bs] latent codes to be passed into the model.
@@ -98,6 +101,58 @@ class IMLE_DAE_MLP(nn.Module):
         fx = self.ada_in(fx, z)
         fx = self.decoder(fx)
         return fx.view(len(z), *in_shape)
+
+    def to_encoder_with_ada_in(self, use_mean_representation=True):
+        return EncoderWithAdaIn(self.encoder, self.ada_in,
+            use_mean_representation=use_mean_representation).to(device)
+
+class EncoderWithAdaIn(nn.Module):
+
+    def __init__(self, encoder, ada_in, use_mean_representation=False):
+        super(EncoderWithAdaIn, self).__init__()
+        self.encoder = encoder
+        self.ada_in = ada_in
+        self.code_dim = 512
+        self.use_mean_representation = use_mean_representation
+
+    def get_codes(self, bs, device="cpu", seed=None):
+        """Returns [bs] latent codes to be passed into the model.
+
+        Args:
+        bs      -- number of latent codes to return
+        device  -- device to return latent codes on
+        seed    -- None for no seed (outputs will be different on different
+                    calls), or a number for a fixed seed
+        """
+        if seed is None:
+            return torch.randn(bs, self.code_dim, device=device)
+        else:
+            z = torch.zeros(bs, self.code_dim, device=device)
+            z.normal_(generator=torch.Generator(device).manual_seed(seed))
+            return z
+
+    def forward(self, x, z=None, num_z=1, seed=None):
+        in_shape = x.shape[1:]
+        
+        if self.use_mean_representation:
+            if z is None:
+                new_num_z = 64
+                z = self.get_codes(len(x) * new_num_z,
+                    device=x.device,
+                    seed=seed)
+
+            bs = x.shape[0]
+
+            fx = self.encoder(x)
+            fx = self.ada_in(fx, z)
+            fx = fx.view(bs, new_num_z, -1)
+            fx = fx.mean(dim=1)
+            return fx
+        else:
+            z = self.get_codes(len(x) * num_z, device=x.device, seed=seed)
+            fx = self.encoder(x)
+            return self.ada_in(fx, z)
+        
 
 class AdaIN(nn.Module):
     """AdaIN adapted for a transformer. Expects a BSxNPxC batch of images, where
