@@ -62,7 +62,7 @@ def evaluate(model, loader_tr, loader_val, scheduler, args, cur_step):
         acc_vals = {}
         acc_vals_str = ""
     
-    tqdm.write(f"Step {cur_step}/{len(loader_tr) * args.ipe * args.epochs} - lr={scheduler.get_lr():.5e} loss/tr={loss_tr:.5f} loss/te={loss_val:.5f} {acc_vals_str}")
+    tqdm.write(f"Step {cur_step}/{len(loader_tr) * args.epochs} - lr={scheduler.get_lr():.5e} loss/tr={loss_tr:.5f} loss/te={loss_val:.5f} {acc_vals_str}")
     
     acc_vals = LinearProbe.probe(model, loader_tr, loader_val, args)
     acc_vals_str = " ".join([f"{k}={v:.5f}" for k,v in acc_vals.items()])
