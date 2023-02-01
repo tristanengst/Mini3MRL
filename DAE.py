@@ -63,10 +63,6 @@ def evaluate(model, loader_tr, loader_val, scheduler, args, cur_step):
         acc_vals_str = ""
     
     tqdm.write(f"Step {cur_step}/{len(loader_tr) * args.epochs} - lr={scheduler.get_lr():.5e} loss/tr={loss_tr:.5f} loss/te={loss_val:.5f} {acc_vals_str}")
-    
-    acc_vals = LinearProbe.probe(model, loader_tr, loader_val, args)
-    acc_vals_str = " ".join([f"{k}={v:.5f}" for k,v in acc_vals.items()])
-    tqdm.write(f"Step {cur_step:6}/{len(loader_tr) * args.epochs} - lr={scheduler.get_lr():.5e} loss/tr={loss_tr:.5f} loss/te={loss_val:.5f} {acc_vals_str}")
 
     # Create an image to visualize how the model is doing
     image_save_folder = f"{dae_model_folder(args, make_folder=True)}/images"
