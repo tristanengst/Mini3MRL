@@ -24,7 +24,8 @@ def dae_model_folder(args, make_folder=False):
     data_str = Data.dataset_pretty_name(args.data_tr)
     suffix = "" if args.suffix is None else f"-{args.suffix}"
     job_id = "" if args.job_id is None else f"-{args.job_id}"
-    folder = f"{args.save_folder}/models_{args.script}/{args.script}-{data_str}-bs{args.bs}-epochs{args.epochs}-lr{args.lr}-nshot{args.n_shot}-nway{args.n_way}-std{args.std}-{args.seed}-{args.uid}{job_id}{suffix}"
+    lrs = "_".join([f"{lr:.2e}" for idx,lr in args.lrs if idx % 2 == 1])
+    folder = f"{args.save_folder}/models_{args.script}/{args.script}-{data_str}-bs{args.bs}-epochs{args.epochs}-lr{lrs}-nshot{args.n_shot}-nway{args.n_way}-std{args.std}-{args.seed}-{args.uid}{job_id}{suffix}"
 
     if make_folder:
         Utils.conditional_make_folder(folder)
