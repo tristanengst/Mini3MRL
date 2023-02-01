@@ -25,7 +25,7 @@ def imle_model_folder(args, make_folder=False):
     data_str = Data.dataset_pretty_name(args.data_tr)
     suffix = "" if args.suffix is None else f"-{args.suffix}"
     job_id = "" if args.job_id is None else f"-{args.job_id}"
-    lrs = "_".join([f"{lr:.2e}" for idx,lr in args.lrs if idx % 2 == 1])
+    lrs = "_".join([f"{lr:.2e}" for idx,lr in enumerate(args.lrs) if idx % 2 == 1])
     folder = f"{args.save_folder}/models_{args.script}/{args.script}-{data_str}-bs{args.bs}-epochs{args.epochs}-ipe{args.ipe}-lr{lrs}-ns{args.ns}-nshot{args.n_way}-nway{args.n_shot}-std{args.std}-seed{args.seed}-{args.uid}{job_id}{suffix}"
 
     if make_folder:
