@@ -32,7 +32,7 @@ def dae_model_folder(args, make_folder=False):
     return folder
 
 def evaluate(model, loader_tr, loader_val, scheduler, args, cur_step):
-    eval_loss_fn = nn.MSELoss(reduction="sum")
+    eval_loss_fn = nn.BCELoss(reduction="sum")
     loss_tr, loss_val = 0, 0
     total_tr, total_val = 0, 0
     with torch.no_grad():
@@ -150,9 +150,10 @@ if __name__ == "__main__":
         num_workers=args.num_workers,
         pin_memory=True)
     
-    tqdm.write(f"----------\n{args}\n----------")
+    tqdm.write(f"-------\n{Utils.sorted_namespace(args)}\n-------")
+    tqdm.write(f"Will save to {dae_model_folder(args)}")
 
-    cur_step = 0
+    cur_step = (last_epoch + 1) * len(loader_tr)
     _ = evaluate(model, loader_tr, loader_val, scheduler, args, cur_step)
     
     for epoch in tqdm(range(args.epochs),

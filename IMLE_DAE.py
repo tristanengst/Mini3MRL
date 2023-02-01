@@ -33,7 +33,7 @@ def imle_model_folder(args, make_folder=False):
     return folder
 
 def evaluate(model, loader_tr, loader_val, scheduler, args, cur_step):
-    eval_loss_fn = nn.MSELoss(reduction="sum")
+    eval_loss_fn = nn.BCELoss(reduction="sum")
     loss_tr, loss_val = 0, 0
     total_tr, total_val = 0, 0
     with torch.no_grad():
@@ -266,8 +266,8 @@ if __name__ == "__main__":
             optimizer.zero_grad(set_to_none=True)
             cur_step += 1
 
-        # Otherwise the worker threads hang around and cause problems!
-        del loader
+        # Otherwise the worker threads hang around and cause problems?
+        del loader, chain_loader
         
         _ = evaluate(model, loader_tr, loader_val, scheduler, args, cur_step)
         
