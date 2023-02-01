@@ -41,9 +41,11 @@ def parser_with_default_args(P):
 
 def parser_with_logging_args(P):
     P.add_argument("--eval_iter", default=1, type=int,
-        help="Evaluate every EVAL_ITER epochs/samplings.")
+        help="Evaluate on the proxy task every EVAL_ITER epochs/samplings.")
     P.add_argument("--save_iter", default=0, type=int,
         help="Save every SAVE_ITER epochs/samplings.")
+    P.add_argument("--probe_iter", default=5, type=int,
+        help="Probe every PROBE_ITER epochs/samplings. Must be multiple of EVAL_ITER")
     return P
 
 def parser_with_data_args(P):
@@ -77,7 +79,7 @@ def parser_with_training_args(P):
 def parser_with_probe_args(P):
     P.add_argument("--probe_lrs", default=[0, 1e-3], type=float, nargs="*",
         help="Learning rates. Even indices give step indices, odd indices give the learning rate to start at the step given at the prior index.")
-    P.add_argument("--probe_epochs",type=int, default=25,
+    P.add_argument("--probe_epochs",type=int, default=100,
         help="Number of epochs for the probe")
     P.add_argument("--probe_linear", choices=[0, 1], default=0, type=int,
         help="Whether to include a linear probe")

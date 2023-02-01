@@ -54,7 +54,7 @@ def evaluate(model, loader_tr, loader_val, scheduler, args, cur_step):
     loss_val = loss_val.item() / total_val
 
     epoch = cur_step // loader_tr
-    if epoch % args.eval_iter == 0 or epoch == args.epochs - 1:
+    if epoch % args.probe_iter == 0 or epoch == args.epochs - 1:
         acc_vals = LinearProbe.probe(model, loader_tr, loader_val, args)
         acc_vals_str = " ".join([f"{k}={v:.5f}" for k,v in acc_vals.items()])
     else:
@@ -86,9 +86,12 @@ def evaluate(model, loader_tr, loader_val, scheduler, args, cur_step):
         "loss/tr": loss_tr,
         "lr": scheduler.get_lr(),
         "train_step": cur_step,
+        "images/te": wandb.Image(image_path_val),
         "images/tr": wandb.Image(image_path_tr),
-        "images/te": wandb.Image(image_path_val)
-    })
+        "epoch": cur_step // (len(loader_tr))
+    }, step=cur_step)
+
+    
 
 def get_args(args=None):
     P = argparse.ArgumentParser()
@@ -103,6 +106,9 @@ def get_args(args=None):
     args.script = "dae" if args.script is None else args.script
     args.lrs = Utils.StepScheduler.process_lrs(args.lrs)
     args.probe_lrs = Utils.StepScheduler.process_lrs(args.probe_lrs)
+
+    assert args.probe_iter % args.eval_iter == 0
+
     return args
 
 if __name__ == "__main__":
