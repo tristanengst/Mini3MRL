@@ -54,7 +54,7 @@ def evaluate(model, loader_tr, loader_val, scheduler, args, cur_step):
     loss_tr = loss_tr.item() / total_tr
     loss_val = loss_val.item() / total_val
 
-    epoch = cur_step // loader_tr
+    epoch = cur_step // len(loader_tr)
     if epoch % args.probe_iter == 0 or epoch == args.epochs - 1:
         acc_vals = LinearProbe.probe(model, loader_tr, loader_val, args)
         acc_vals_str = " ".join([f"{k}={v:.5f}" for k,v in acc_vals.items()])
@@ -182,7 +182,7 @@ if __name__ == "__main__":
             optimizer.zero_grad(set_to_none=True)
             cur_step += 1
         
-       _ = evaluate(model, loader_tr, loader_val, scheduler, args, cur_step)
+        _ = evaluate(model, loader_tr, loader_val, scheduler, args, cur_step)
         
         if not args.save_iter == 0 and epoch % args.save_iter == 0:
             _ = Utils.save_state(model, optimizer,
