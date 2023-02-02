@@ -133,7 +133,7 @@ def linear_probe(model, loader_tr, loader_val, args, **kwargs):
         scheduler.step()
 
         if args.probe_verbosity > 0 and e % (args.probe_epochs // 6) == 0:
-            tqdm.write(f"\tMLP probe epoch {e:4}/{args.probe_epochs} - loss/tr={loss.item()} acc/te={accuracy(model, loader_val, args)}")
+            tqdm.write(f"\tLinear probe epoch {e:4}/{args.probe_epochs} - loss/tr={loss.item()} acc/te={accuracy(model, loader_val, args)}")
 
     return accuracy(model, loader_val, args)
 
@@ -148,8 +148,6 @@ def mlp_probe(model, loader_tr, loader_val, args, **kwargs):
         lr=args.probe_lrs[1],
         weight_decay=1e-5)
     scheduler = Utils.StepScheduler(optimizer, args.probe_lrs)
-
-    
     
     for e in tqdm(range(args.probe_epochs),
         desc="Probe Epochs",
