@@ -46,9 +46,9 @@ def parser_with_logging_args(P):
         help="Save the run every SAVE_ITER epochs/samplings.")
     P.add_argument("--probe_iter", default=5, type=int,
         help="Probe every PROBE_ITER epochs/samplings. Must be multiple of EVAL_ITER")
-    P.add_argument("---num_eval_images", type=int, default=10,
+    P.add_argument("--num_eval_images", type=int, default=10,
         help="Number of images generate to generate from when logging images during evaluation")
-    P.add_argument("---num_eval_samples", type=int, default=10,
+    P.add_argument("--num_eval_samples", type=int, default=10,
         help="Number of latent codes per imagewhen logging images during evaluation")
     return P
 
