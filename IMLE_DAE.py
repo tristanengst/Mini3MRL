@@ -33,71 +33,83 @@ def imle_model_folder(args, make_folder=False):
 
     return folder
 
-def evaluate(model, loader_tr, loader_val, scheduler, args, cur_step):
-    eval_loss_fn = nn.BCELoss(reduction="sum")
-    loss_tr, loss_val = 0, 0
-    total_tr, total_val = 0, 0
-    with torch.no_grad():
-        for x_tr,_ in loader_tr:
-            x_tr = x_tr.to(device, non_blocking=True)
-            nx_tr = Utils.with_noise(x_tr, std=args.std)
-            fxn_tr = model(nx_tr)
-            loss_tr += eval_loss_fn(fxn_tr, x_tr)
-            total_tr += len(x_tr)
-
-        for x_val,_ in loader_val:
-            x_val = x_val.to(device, non_blocking=True)
-            nx_val = Utils.with_noise(x_val, std=args.std, seed=args.seed)
-            fxn_val = model(nx_val)
-            loss_val += eval_loss_fn(fxn_val, x_val)
-            total_val += len(x_val)
+def evaluate(model, data_tr, data_val, scheduler, args, cur_step, nxz_data_tr=None):
+    """Prints evaluation statistics and logs them to WandB.
     
-    loss_tr = loss_tr.item() / total_tr
-    loss_val = loss_val.item() / total_val
+    Args:
+    model       -- the model being evaluated
+    data_tr     -- ImageFolder-like dataset over training data
+    data_val    -- ImageFolder-like dataset over validation data
+    scheduler   -- learning rate scheduler for the run
+    args        -- argparse Namespace parameterizing run
+    cur_step    -- number of training steps so far run
+    nxz_data_tr -- ImageLatentDataset over the training data, or None to create
+                    it on the fly from [data_tr]
+    """
+    # Get ImageLatentDatasets as needed
+    if nxz_data_tr is None:
+        nxz_data_tr = ImageLatentDataset.get_image_latent_dataset(
+            model=model,
+            loss_fn=nn.BCELoss(reduction="none"),
+            dataset=data_tr,
+            args=args)
+    nxz_data_val = ImageLatentDataset.get_image_latent_dataset(
+        model=model,
+        loss_fn=nn.BCELoss(reduction="none"),
+        dataset=data_tr,
+        args=args)
+
+    # Generate images
+    image_save_folder = f"{imle_model_folder(args, make_folder=True)}/images"
+    Utils.conditional_make_folder(image_save_folder)
+    images_tr = ImageLatentDataset.generate_images(nxz_data_tr, model, args)
+    images_tr.save(f"{image_save_folder}/{cur_step}_tr.png")
+    images_val = ImageLatentDataset.generate_images(nxz_data_val, model, args)
+    images_val.save(f"{image_save_folder}/{cur_step}_val.png")
+
+    # Evaluate on the proxy task            
+    loss_tr_min = ImageLatentDataset.eval_model(nxz_data_tr, model, args, use_sampled_codes=True)
+    loss_tr_mean = ImageLatentDataset.eval_model(nxz_data_tr, model, args, use_sampled_codes=False)
+    loss_val_min = ImageLatentDataset.eval_model(nxz_data_val, model, args, use_sampled_codes=True)
+    loss_val_mean = ImageLatentDataset.eval_model(nxz_data_val, model, args, use_sampled_codes=False)
+
+    # Evaluate on the probing task
+    loader_tr = DataLoader(data_tr,
+        batch_size=args.bs,
+        shuffle=True,
+        num_workers=args.num_workers,
+        pin_memory=True)
+    loader_val = DataLoader(data_val,
+        batch_size=args.bs,
+        num_workers=args.num_workers,
+        pin_memory=True)
 
     epoch = cur_step / (len(loader_tr) * args.ipe)
     if epoch % args.probe_iter == 0 or epoch == args.epochs - 1:
-        acc_vals = LinearProbe.probe(model, loader_tr, loader_val, args)
-        acc_vals_str = " ".join([f"{k}={v:.5f}" for k,v in acc_vals.items()])
+        probe_results = LinearProbe.probe(model, loader_tr, loader_val, args)
+        probe_str = " ".join([f"{k}={v:.5f}" for k,v in probe_results.items()])
     else:
-        acc_vals = {}
-        acc_vals_str = ""
+        probe_results = {}
+        probe_str = ""
     
-    tqdm.write(f"Step {cur_step}/{len(loader_tr) * args.ipe * args.epochs} - lr={scheduler.get_lr():.5e} loss/tr={loss_tr:.5f} loss/te={loss_val:.5f} {acc_vals_str}")
+    tqdm.write(f"Step {cur_step}/{len(loader_tr) * args.ipe * args.epochs} - lr={scheduler.get_lr():.5e} loss/min/tr={loss_tr_min:.5f} loss/min/val={loss_val_min:.5f} loss/mean/tr={loss_tr_mean:.5f} loss/mean/val={loss_val_mean:.5f} {probe_str}")
 
-    image_shape = x_val.shape[1:]
-
-    # Create an image to visualize how the model is doing
-    image_save_folder = f"{imle_model_folder(args, make_folder=True)}/images"
-    Utils.conditional_make_folder(image_save_folder)
-    image_path_tr = f"{image_save_folder}/{cur_step}_tr.png"
-    with torch.no_grad():
-        fxn_tr = model(nx_tr[:8], num_z=6, seed=args.seed).view(8, 6, *image_shape)
-    image = torch.cat([x_tr[:8].unsqueeze(1), nx_tr[:8].unsqueeze(1), fxn_tr], dim=1)
-    Utils.images_to_pil_image(image).save(image_path_tr)
-
-    # Create an image to visualize how the model is doing
-    Utils.conditional_make_folder(image_save_folder)
-    image_path_val = f"{image_save_folder}/{cur_step}_val.png"
-    with torch.no_grad():
-        fxn_val = model(nx_val[:8], num_z=6, seed=args.seed).view(8, 6, *image_shape)
-    image = torch.cat([x_val[:8].unsqueeze(1), nx_val[:8].unsqueeze(1), fxn_val], dim=1)
-    Utils.images_to_pil_image(image).save(image_path_val)
-
-    wandb.log(acc_vals | {
-        "loss/te": loss_val,
-        "loss/tr": loss_tr,
+    wandb.log(probe_results | {
+        "loss/min/tr": loss_tr_min,
+        "loss/min/val": loss_val_min,
+        "loss/mean/tr": loss_tr_mean,
+        "loss/mean/val": loss_val_mean,
         "lr": scheduler.get_lr(),
         "train_step": cur_step,
-        "images/te": wandb.Image(image_path_val),
-        "images/tr": wandb.Image(image_path_tr),
+        "images/val": wandb.Image(f"{image_save_folder}/{cur_step}_val.png"),
+        "images/tr": wandb.Image(f"{image_save_folder}/{cur_step}_tr.png"),
         "epoch": cur_step // (len(loader_tr) * args.ipe)
     }, step=cur_step)
 
 class ImageLatentDataset(Dataset):
-
-    def __init__(self, noised_images, latents, images):
+    def __init__(self, data, noised_images, latents, images):
         super(ImageLatentDataset, self).__init__()
+        self.data = data
         self.noised_images = noised_images.cpu()
         self.latents = latents.cpu()
         self.images = images.cpu()
@@ -107,6 +119,99 @@ class ImageLatentDataset(Dataset):
     def __getitem__(self, idx):
         return self.noised_images[idx], self.latents[idx], self.images[idx]
 
+    @staticmethod
+    def generate_2d_samples(nxz_data):
+        raise NotImplementedError()
+
+    @staticmethod
+    def generate_images(nxz_data, model, args, idxs=None, num_images=None, num_samples=None, seed=None):
+        """Returns a PIL image from running [model] on [nxz_data].
+        
+        Args:
+        nxz_data    -- ImageLatentDataset containing images
+        model       -- model to generate images with
+        args        -- argparse Namespace with relevant parameters. Its
+                        NUM_EVAL_IMAGES, NUM_EVAL_SAMPLES, SEED are overriden by
+                        other arguments to this function when they are not None
+        idxs        -- indices to [image_latent_data] to use
+        num_images  -- number of images to use. Overriden by [idxs]
+        num_samples -- number of samples to generate per image
+        seed        -- seed to use for latent codes 
+        """
+        if idxs is None and num_images is None:
+            idxs = Utils.sample(range(len(nxz_data)), k=args.num_eval_images)
+        elif idxs is None and not num_images is None:
+            idxs = Utils.sample(range(len(nxz_data)), k=num_images)
+        else:
+            idxs = idxs
+        
+        num_samples = args.num_eval_samples if num_samples is None else num_samples
+
+        data = Subset(Data.ZipDataset(nxz_data.data, nxz_data), indices=idxs)
+        loader = DataLoader(data,
+            batch_size=max(1, args.code_bs // num_samples),
+            num_workers=args.num_workers,
+            pin_memory=True)
+
+        image_shape = data[0][0][0].shape
+
+        with torch.no_grad():
+            inputs, noised_inputs, generates = [], [], []
+            for (x,_),(nx,_,_) in tqdm(loader,
+                desc="Generating images",
+                total=len(loader),
+                leave=False,
+                dynamic_ncols=True):
+
+                fx = model(nx, num_z=num_samples, seed=args.seed).cpu()
+                inputs.append(x)
+                noised_inputs.append(nx)
+                generates.append(fx)
+
+        inputs = torch.cat(inputs, dim=0).unsqueeze(1)
+        noised_inputs = torch.cat(noised_inputs, dim=0).unsqueeze(1)
+        generates = torch.cat(generates, dim=0).view(len(idxs), num_samples, *image_shape)
+
+        images = torch.cat([inputs, noised_inputs, generates], dim=1)
+        images = images.view(len(idxs), num_samples + 2, *image_shape)
+        return Utils.images_to_pil_image(images)
+
+    @staticmethod
+    def eval_model(nxz_data, model, args, loss_fn=None, use_sampled_codes=True):
+        """Returns the loss of [model] evaluated on data in nxz_data.
+
+        Args:
+        nxz_data            -- ImageLatentDataset
+        model               -- IMLE model to evaluate
+        args                -- argparse Namespace parameterizing run
+        loss_fn             -- loss function to use
+        use_sampled_codes   -- whether to use the codes sampled in [nxz_data]
+                                (IMLE objective) or random new ones (minimize
+                                expected loss)
+        """
+        loss, total = 0, 0
+        loss_fn = nn.BCELoss(reduction="mean") if loss_fn is None else loss_fn
+        with torch.no_grad():
+            loader = DataLoader(nxz_data,
+                batch_size=args.code_bs,
+                num_workers=args.num_workers,
+                shuffle=False,
+                pin_memory=True)
+            
+            for xn,z,x in tqdm(loader,
+                desc="Evaluating on ImageLatentDataset",
+                total=len(loader),
+                leave=False,
+                dynamic_ncols=True):
+
+                xn = xn.to(device, non_blocking=True)
+                z = z.to(device, non_blocking=True) if use_sampled_codes else None
+                x = x.to(device, non_blocking=True)
+                loss += loss_fn(model(xn, z), x) * len(x)
+                total += len(x)
+        
+        return loss.item() / total
+                
     @staticmethod
     def get_image_latent_dataset(model, loss_fn, dataset, args):
         """Returns an ImageLatentDataset giving noised images and codes for
@@ -140,7 +245,7 @@ class ImageLatentDataset(Dataset):
 
                 start_idx = idx * args.code_bs
                 stop_idx = min(start_idx + args.code_bs, len(dataset))
-                x = x.to(device, non_blocking=True).view(x.shape[0], -1)
+                x = x.to(device, non_blocking=True)
                 xn = Utils.with_noise(x, std=args.std)
 
                 for sample_idx in tqdm(range(args.ns),
@@ -151,7 +256,7 @@ class ImageLatentDataset(Dataset):
                     z = Utils.de_dataparallel(model).get_codes(len(xn), device=xn.device)
                     fxn = model(xn, z)
                     losses = loss_fn(fxn, x)
-                    losses = torch.sum(losses, dim=1)
+                    losses = torch.sum(losses.view(len(x), -1), dim=1)
 
                     change_idxs = (losses < least_losses[start_idx:stop_idx])
                     least_losses[start_idx:stop_idx][change_idxs] = losses[change_idxs]
@@ -162,7 +267,7 @@ class ImageLatentDataset(Dataset):
 
         noised_images = torch.cat(noised_images, dim=0)
         images = torch.cat(images, dim=0)
-        return ImageLatentDataset(noised_images, best_latents.cpu(), images)
+        return ImageLatentDataset(dataset, noised_images, best_latents.cpu(), images)
 
 def get_args(args=None):
     P = argparse.ArgumentParser()
@@ -218,22 +323,12 @@ if __name__ == "__main__":
     tqdm.write(f"TRAINING DATA\n{data_tr}")
     tqdm.write(f"VALIDATION DATA\n{data_val}")
     
-    loader_tr = DataLoader(data_tr,
-        batch_size=args.bs,
-        shuffle=True,
-        num_workers=args.num_workers,
-        pin_memory=True)
-    loader_val = DataLoader(data_val,
-        batch_size=args.bs,
-        num_workers=args.num_workers,
-        pin_memory=True)
-    
     tqdm.write(f"-------\n{Utils.sorted_namespace(args)}\n-------")
     tqdm.write(f"Will save to {imle_model_folder(args)}")
 
     cur_step = (last_epoch + 1) * args.ipe * len(data_tr) // args.bs
     num_steps = args.ipe * len(data_tr) // args.bs
-    _ = evaluate(model, loader_tr, loader_val, scheduler, args, cur_step)
+    _ = evaluate(model, data_tr, data_val, scheduler, args, cur_step)
     for epoch in tqdm(range(last_epoch + 1, args.epochs),
         dynamic_ncols=True,
         desc="Epochs"):
@@ -272,7 +367,8 @@ if __name__ == "__main__":
         # Otherwise the worker threads hang around and cause problems?
         del loader, chain_loader
         
-        _ = evaluate(model, loader_tr, loader_val, scheduler, args, cur_step)
+        _ = evaluate(model, data_tr, data_val, scheduler, args, cur_step,
+            nxz_data_tr=epoch_dataset)
         
         if not args.save_iter == 0 and epoch % args.save_iter == 0:
             _ = Utils.save_state(model, optimizer,
@@ -283,9 +379,4 @@ if __name__ == "__main__":
             raise NotImplementedError()
     
         scheduler.step(epoch)
-    
-        
-
-
-
         

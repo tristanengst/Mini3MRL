@@ -104,6 +104,10 @@ def get_args(args=None):
     args.lrs = Utils.StepScheduler.process_lrs(args.lrs)
     args.probe_lrs = Utils.StepScheduler.process_lrs(args.probe_lrs)
 
+    if not args.num_eval_samples == 1:
+        tqdm.write(f"LOG: setting NUM_EVAL_SAMPLES to 1")
+        args.num_eval_samples = 1
+
     assert args.probe_iter % args.eval_iter == 0
 
     return args

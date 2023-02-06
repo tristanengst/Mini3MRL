@@ -101,21 +101,12 @@ def images_to_pil_image(images):
     This function should handle a myriad of inputs and thus pull complexity from
     other places in the code inside of it.
     """
-    if images.shape[-1] == 784 and len(images.shape) == 3:
-        images = images.view(images.shape[0], images.shape[1], 28, 28)
-    elif images.shape[-1] == 784 and len(images.shape) == 2:
-        images = images.view(images.shape[0], 1, 28, 28)
-    elif images.shape[-1] == 28 and len(images.shape) == 3:
-        images = images.view(images.shape[0], 1, 28, 28)
-    elif images.shape[-1] == 28 and len(images.shape) == 4:
-        pass
-    elif images.shape[-1] == 28 and len(images.shape) == 5:
-        images = images.expand(*images.shape[:2], *(3,), *images.shape[-2:])
-    elif isinstance(images, list):
-        pass
-    else:
-        raise NotImplementedError(f"Image type {type(images)} not supported {f'shape {images.shape}' if isinstance(images, torch.Tensor) else ''}")
-
+    if len(images.shape) == 3:
+        images = images.view(1, 1, *images.shape)
+    elif len(images.shape) == 4: # Assume batch index should be rows
+        images = images.view(images.shape[0], 1, *images.shape[1:])
+    elif len(images.shape) == 5:
+        images = images
 
     fig, axs = plt.subplots(ncols=max([len(image_row) for image_row in images]),
         nrows=len(images),
@@ -124,9 +115,7 @@ def images_to_pil_image(images):
     for i,images_row in enumerate(images):
         for j,image in enumerate(images_row):
             image = torch.clip((image * 255), 0, 255).int().cpu()
-            
-            image = image.permute(-2, -1, 0) if image.shape[0] == 3 else image
-
+            image = image.permute(-2, -1, 0) if len(image.shape) == 3 else image
             axs[i, j].imshow(np.asarray(image), cmap='Greys_r')
             axs[i, j].set(xticklabels=[], yticklabels=[], xticks=[], yticks=[])
 

@@ -25,12 +25,6 @@ def parser_with_default_args(P):
         help="Seed")
     P.add_argument("--save_folder", default=f"{os.path.abspath(os.path.dirname(__file__))}",
         help="Absolute path to where to save")
-    P.add_argument("--uid", default=None,
-        help="WandB UID")
-    P.add_argument("--script", default=None,
-        help="Name of the script being run. Individual scripts should set this if not None.")
-    P.add_argument("--job_id", type=str, default=None,
-        help="SLURM job ID")
     P.add_argument("--num_workers", default=20, type=int,
         help="Number of DataLoader workers")
     P.add_argument("--gpus", type=int, nargs="+", default=[0, 1],
@@ -40,12 +34,22 @@ def parser_with_default_args(P):
     return P
 
 def parser_with_logging_args(P):
+    P.add_argument("--script", default=None,
+        help="Name of the script being run. Individual scripts should set this if not None.")
+    P.add_argument("--job_id", type=str, default=None,
+        help="SLURM job ID")
+    P.add_argument("--uid", default=None,
+        help="WandB UID. Specify only to resume an existing run.")
     P.add_argument("--eval_iter", default=1, type=int,
         help="Evaluate on the proxy task every EVAL_ITER epochs/samplings.")
     P.add_argument("--save_iter", default=0, type=int,
-        help="Save every SAVE_ITER epochs/samplings.")
+        help="Save the run every SAVE_ITER epochs/samplings.")
     P.add_argument("--probe_iter", default=5, type=int,
         help="Probe every PROBE_ITER epochs/samplings. Must be multiple of EVAL_ITER")
+    P.add_argument("---num_eval_images", type=int, default=10,
+        help="Number of images generate to generate from when logging images during evaluation")
+    P.add_argument("---num_eval_samples", type=int, default=10,
+        help="Number of latent codes per imagewhen logging images during evaluation")
     return P
 
 def parser_with_data_args(P):
@@ -85,10 +89,6 @@ def parser_with_probe_args(P):
         help="Whether to include a linear probe")
     P.add_argument("--probe_mlp", choices=[0, 1], default=0, type=int,
         help="Whether the probe should include an MLP")
-    P.add_argument("--probe_svm", choices=[0, 1], default=0, type=int,
-        help="Whether the probe should include SVM")
-    P.add_argument("--probe_knn", choices=[0, 1], default=0, type=int,
-        help="Whether the probe should include KNN")
     P.add_argument("--probe_include_codes", choices=[0, 1, 2], default=0, type=int,
         help="Whether the probe should include noise. 2 does it both ways")
     P.add_argument("--probe_verbosity", choices=[0, 1], default=0, type=int,

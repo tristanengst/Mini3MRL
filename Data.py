@@ -232,4 +232,24 @@ class ImageFolderSubset(Dataset):
         else:
             raise NotImplementedError()
 
+class ZipDataset(Dataset):
+
+    def __init__(self, *datasets):
+        super(ZipDataset, self).__init__()
+        data_lengths = [len(d) for d in datasets]
+        if not len(set(data_lengths)) == 1:
+            raise ValueError(f"All input datasets should have the same length, but got lengths of {data_lengths}")
+
+        self.datasets = datasets
+
+    def __len__(self): return len(self.datasets[0])
+    def __getitem__(self, idx): return tuple([d[idx] for d in self.datasets])
+
+
+if __name__ == "__main__": pass
+
+
+
+    
+
         
