@@ -137,6 +137,7 @@ if __name__ == "__main__":
 
     wandb.init(anonymous="allow", id=args.uid, config=args,
         mode=args.wandb, project="Mini3MRL", entity="apex-lab",
+        settings=wandb.Settings(code_dir="."),
         name=os.path.basename(dae_model_folder(args)))
     
     scheduler = Utils.StepScheduler(optimizer, args.lrs)
