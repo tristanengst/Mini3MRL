@@ -9,6 +9,8 @@ Notes:
     2. Run this script
     3. Remove the run on WandB
 """
+import argparse
+from datetime import datetime
 import os
 from tqdm import tqdm
 import shutil
@@ -43,13 +45,20 @@ def get_sync_result(f):
 
         return result
 
+P = argparse.ArgumentParser()
+P.add_argument("--force", default=False, type=int, choices=[0, 1])
+args = P.parse_args()
+
 lock_file = ".wandb_sync_lock_file"
-if os.path.exists(lock_file):
-    pass
+if os.path.exists(lock_file) and not args.force:
+    with open(lock_file, "r+") as f:
+        contents = f.read()
+    tqdm.write(f"Lock file exists with content\n{content}\n\nEnding.")
 else:
-    with open(lock_file, "w+") as f:
-        f.write("Please don't delete me!")
-    tqdm.write(f"Created lock file")
+    if not args.force:
+        with open(lock_file, "w+") as f:
+            f.write(f"Please don't delete me! {datetime.now()}")
+        tqdm.write(f"Created lock file")
 
     try:
         files = [f"wandb/{f}" for f in os.listdir("wandb") if f.startswith("offline-run")]
@@ -68,12 +77,14 @@ else:
                 tqdm.write(f"Removing job that had an error in syncing...")
                 shutil.rmtree(f)
     except Exception as e:
-        os.remove(lock_file)
-        tqdm.write(f"Removed lock file {lock_file}; raising error")
+        if not args.force:
+            os.remove(lock_file)
+            tqdm.write(f"Removed lock file {lock_file}; raising error")
         raise e
     finally:
-        tqdm.write(f"Removed lock file {lock_file}")
-        os.remove(lock_file)
+        if not args.force:
+            tqdm.write(f"Removed lock file {lock_file}")
+            os.remove(lock_file)
     
 
         
