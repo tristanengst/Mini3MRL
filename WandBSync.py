@@ -43,18 +43,37 @@ def get_sync_result(f):
 
         return result
 
-files = [f"wandb/{f}" for f in os.listdir("wandb") if f.startswith("offline-run")]
-for f in tqdm(files):
+lock_file = ".wandb_sync_lock_file"
+if os.path.exists(lock_file):
+    pass
+else:
+    with open(lock_file, "w+") as f:
+        f.write("Please don't delete me!")
+    tqdm.write(f"Created lock file")
 
-    sync_result = get_sync_result(f)
-    tqdm.write(str(sync_result))
+    try:
+        files = [f"wandb/{f}" for f in os.listdir("wandb") if f.startswith("offline-run")]
+        for f in tqdm(files):
 
-    if os.path.exists(f"{f}/files/wandb-summary.json"):
-        tqdm.write(f"Run completed, synced")
-        shutil.rmtree(f)
-    elif sync_result["finished"]:
-        tqdm.write(f"Run completed, not synced.")
+            sync_result = get_sync_result(f)
+            tqdm.write(str(sync_result))
+
+            if os.path.exists(f"{f}/files/wandb-summary.json"):
+                tqdm.write(f"Run completed, synced")
+                shutil.rmtree(f)
+            elif sync_result["finished"]:
+                tqdm.write(f"Run completed, not synced.")
+            
+            if sync_result["can_delete_job"] and os.path.exists(f):
+                tqdm.write(f"Removing job that had an error in syncing...")
+                shutil.rmtree(f)
+    except Exception as e:
+        os.remove(lock_file)
+        tqdm.write(f"Removed lock file {lock_file}; raising error")
+        raise e
+    finally:
+        tqdm.write(f"Removed lock file {lock_file}")
+        os.remove(lock_file)
     
-    if sync_result["can_delete_job"] and os.path.exists(f):
-        tqdm.write(f"Removing job that had an error in syncing...")
-        shutil.rmtree(f)
+
+        
