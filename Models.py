@@ -93,18 +93,16 @@ class IMLE_DAE_MLP(nn.Module):
     def forward(self, x, z=None, num_z=1, seed=None):
         in_shape = x.shape[1:]
         if z is None:
-            z = self.get_codes(len(x) * num_z,
-                device=x.device,
-                seed=seed)
+            z = self.get_codes(len(x) * num_z, device=x.device, seed=seed)
 
         fx = self.encoder(x)
         fx = self.ada_in(fx, z)
         fx = self.decoder(fx)
         return fx.view(len(z), *in_shape)
 
-    def to_encoder_with_ada_in(self, use_mean_representation=True):
+    def to_encoder_with_ada_in(self, use_mean_representation=False):
         return EncoderWithAdaIn(self.encoder, self.ada_in,
-            use_mean_representation=use_mean_representation).to(device)
+            use_mean_representation=use_mean_representation)
 
 class EncoderWithAdaIn(nn.Module):
 
@@ -136,20 +134,18 @@ class EncoderWithAdaIn(nn.Module):
         
         if self.use_mean_representation:
             if z is None:
-                new_num_z = 64
-                z = self.get_codes(len(x) * new_num_z,
-                    device=x.device,
-                    seed=seed)
+                num_z = 64
+                z = self.get_codes(len(x) * num_z,  device=x.device, seed=seed)
 
             bs = x.shape[0]
-
             fx = self.encoder(x)
             fx = self.ada_in(fx, z)
-            fx = fx.view(bs, new_num_z, -1)
+            fx = fx.view(bs, num_z, -1)
             fx = fx.mean(dim=1)
             return fx
         else:
-            z = self.get_codes(len(x) * num_z, device=x.device, seed=seed)
+            if z is None:
+                z = self.get_codes(len(x) * num_z, device=x.device, seed=seed)
             fx = self.encoder(x)
             return self.ada_in(fx, z)
         
