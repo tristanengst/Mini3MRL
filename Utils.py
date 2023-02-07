@@ -125,6 +125,23 @@ def images_to_pil_image(images):
     plt.close("all")
     return Image.open(buf)
 
+def embeddings_to_pil_image(embeddings, classes, method="plain"):
+    """
+    Args:
+    classes -- N-dimensional tensor of classes
+    """
+    embeddings = embeddings.cpu().numpy()
+    classes = [str(c) for c in classes.cpu().numpy().tolist()]
+    n,d = embeddings.shape
+
+    import plotly.express as px
+
+    if d == 2 and method == "plain":
+        fig = px.scatter(x=embeddings[:, 0], y=embeddings[:, 1], color=classes)
+        return Image.open(io.BytesIO(fig.to_image(format="png")))
+    else:
+        raise NotImplementedError()
+
 def de_dataparallel(model):
     if isinstance(model, nn.DataParallel):
         return model.module

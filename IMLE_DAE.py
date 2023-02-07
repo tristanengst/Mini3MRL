@@ -57,12 +57,12 @@ def evaluate(model, data_tr, data_val, scheduler, args, cur_step, nxz_data_tr=No
     nxz_data_val = ImageLatentDataset.get_image_latent_dataset(
         model=model,
         loss_fn=nn.BCELoss(reduction="none"),
-        dataset=data_tr,
+        dataset=data_val,
         args=args)
 
     # Generate 2D embeddings
-    # embeds_tr = ImageLatentDataset.generate_embeddings(nxz_data_tr, model, args)
-    # embeds_val = ImageLatentDataset.generate_embeddings(nxz_data_val, model, args)
+    embeds_tr = ImageLatentDataset.generate_embeddings(nxz_data_tr, model, args)
+    embeds_val = ImageLatentDataset.generate_embeddings(nxz_data_val, model, args)
 
     # Generate images
     image_save_folder = f"{imle_model_folder(args, make_folder=True)}/images"
@@ -104,8 +104,8 @@ def evaluate(model, data_tr, data_val, scheduler, args, cur_step, nxz_data_tr=No
         "loss/min/val": loss_val_min,
         "loss/mean/tr": loss_tr_mean,
         "loss/mean/val": loss_val_mean,
-        # f"embeds_tr_{cur_step}": embeds_tr,
-        # f"embeds_val_{cur_step}": embeds_val,
+        "embeds/tr": wandb.Image(embeds_tr),
+        "embeds/val": wandb.Image(embeds_val),
         "lr": scheduler.get_lr(),
         "train_step": cur_step,
         "images/val": wandb.Image(f"{image_save_folder}/{cur_step}_val.png"),
@@ -159,15 +159,8 @@ class ImageLatentDataset(Dataset):
                 targets.append(y)
         
         embeddings = torch.cat(embeddings, dim=0)
-        targets = torch.cat(targets, dim=0).view(k, -1)
-        data = torch.cat([targets, embeddings], dim=1).numpy()
-        data[:, 0] = np.array([str(d) for d in data[:, 0]])
-
-        return wandb.Table(data=data,
-            columns=["class"] + [f"feat_{idx}" for idx in range(args.feat_dim)])
-
-
-
+        targets = torch.cat(targets, dim=0).view(-1)
+        return Utils.embeddings_to_pil_image(embeddings, targets)
         
     @staticmethod
     def generate_images(nxz_data, model, args, idxs=None, num_images=None, num_samples=None, seed=None):
@@ -359,7 +352,6 @@ if __name__ == "__main__":
 
     wandb.init(anonymous="allow", id=args.uid, config=args,
         mode=args.wandb, project="Mini3MRL", entity="apex-lab",
-        settings=wandb.Settings(code_dir="."),
         name=os.path.basename(imle_model_folder(args)))
     
     scheduler = Utils.StepScheduler(optimizer, args.lrs)
