@@ -108,6 +108,7 @@ def linear_probe(model, loader_tr, loader_val, args, **kwargs):
         weight_decay=1e-5)
     scheduler = Utils.StepScheduler(optimizer, args.probe_lrs)
     
+    epoch2accs_tr, epoch2accs_val = {}, {}
     for e in tqdm(range(args.probe_epochs),
         desc="Probe Epochs",
         leave=False,
@@ -123,19 +124,37 @@ def linear_probe(model, loader_tr, loader_val, args, **kwargs):
 
         scheduler.step()
 
-        if args.probe_verbosity > 0 and e % (args.probe_epochs // 6) == 0:
+        if e % args.probe_eval_iter == 0 or e == args.probe_epochs - 1:
             loss_tr, acc_tr = evaluate_probe(model, loader_tr, args)
             loss_val, acc_val = evaluate_probe(model, loader_val, args)
-            tqdm.write(f"\tLinear probe epoch {e:4}/{args.probe_epochs} - loss/tr={loss_tr} loss/val={loss_val} acc/tr={acc_tr} acc/val={acc_val}")
+            epoch2accs_tr[e] = acc_tr
+            epoch2accs_val[e] =  acc_val
 
-    loss_tr, acc_tr = evaluate_probe(model, loader_tr, args)
-    loss_val, acc_val = evaluate_probe(model, loader_val, args)
-    return {"acc/linear_probe/tr": acc_tr,
-        "acc/linear_probe/val": acc_val,
-        "loss/linear_probe/tr": loss_tr,
-        "loss/linear_probe/val": loss_val}
+    if args.probe_verbosity > 0:
+        eval_str = f"\tLinear probe epoch to accuracy (train/val): "
+        eval_str += " ".join([f"{e:4}=({tr:.2f}/{val:.2f})" for (e,tr),(_,val) in zip(epoch2accs_tr.items(), epoch2accs_val.items())])
+        tqdm.write(eval_str)
 
-    return accuracy(model, loader_val, args)
+    # This measures if the probe broke. We log the delta between the accuracy at
+    # iteration [t] and the maximum it was prior to that iteration. If
+    # accuracies are monotonically increasing, this is zero. Small negative
+    # deltas are okay; large ones aren't.(
+    accs_tr = torch.tensor([epoch2accs_tr[k] for k in sorted(epoch2accs_tr)])
+    max_up_to_idx = torch.tensor([torch.max(accs_tr[:idx]) for idx in range(1, len(accs_tr)+1)])
+    delta_from_max_tr = torch.min(accs_tr - max_up_to_idx)
+
+    accs_val = torch.tensor([epoch2accs_val[k] for k in sorted(epoch2accs_val)])
+    max_up_to_idx = torch.tensor([torch.max(accs_val[:idx]) for idx in range(1, len(accs_val)+1)])
+    delta_from_max_val = torch.min(accs_val - max_up_to_idx)
+
+    return {"acc/linear_probe_max/tr": torch.max(accs_tr),
+        "acc/linear_probe_start/tr": accs_tr[0],
+        "acc/linear_probe_end/tr": accs_tr[-1],
+        "acc/linear_probe_max_delta_from_prior_max/tr": delta_from_max_tr,
+        "acc/linear_probe_max/val": torch.max(accs_val),
+        "acc/linear_probe_start/val": accs_val[0],
+        "acc/linear_probe_end/val": accs_val[-1],
+        "acc/linear_probe_max_delta_from_prior_max/val": delta_from_max_val}
 
 def mlp_probe(model, loader_tr, loader_val, args, **kwargs):
     """Returns the accuracy on [loader_val] of an MLP probe on the
@@ -148,7 +167,8 @@ def mlp_probe(model, loader_tr, loader_val, args, **kwargs):
         lr=args.probe_lrs[1],
         weight_decay=1e-5)
     scheduler = Utils.StepScheduler(optimizer, args.probe_lrs)
-    
+
+    epoch2accs_tr, epoch2accs_val = {}, {}
     for e in tqdm(range(args.probe_epochs),
         desc="Probe Epochs",
         leave=False,
@@ -164,17 +184,37 @@ def mlp_probe(model, loader_tr, loader_val, args, **kwargs):
 
         scheduler.step()
 
-        if args.probe_verbosity > 0 and e % (args.probe_epochs // 6) == 0:
+        if e % args.probe_eval_iter == 0 or e == args.probe_epochs - 1:
             loss_tr, acc_tr = evaluate_probe(model, loader_tr, args)
             loss_val, acc_val = evaluate_probe(model, loader_val, args)
-            tqdm.write(f"\tMLP probe epoch {e:4}/{args.probe_epochs} - loss/tr={loss_tr} loss/val={loss_val} acc/tr={acc_tr} acc/val={acc_val}")
+            epoch2accs_tr[e] = acc_tr
+            epoch2accs_val[e] =  acc_val
 
-    loss_tr, acc_tr = evaluate_probe(model, loader_tr, args)
-    loss_val, acc_val = evaluate_probe(model, loader_val, args)
-    return {"acc/mlp_probe/tr": acc_tr,
-        "acc/mlp_probe/val": acc_val,
-        "loss/mlp_probe/tr": loss_tr,
-        "loss/mlp_probe/val": loss_val}
+    if args.probe_verbosity > 0:
+        eval_str = f"\tMLP probe epoch to accuracy (train/val): "
+        eval_str += " ".join([f"{e:4}=({tr:.2f}/{val:.2f})" for (e,tr),(_,val) in zip(epoch2accs_tr.items(), epoch2accs_val.items())])
+        tqdm.write(eval_str)
+
+    # This measures if the probe broke. We log the delta between the accuracy at
+    # iteration [t] and the maximum it was prior to that iteration. If
+    # accuracies are monotonically increasing, this is zero. Small negative
+    # deltas are okay; large ones aren't.(
+    accs_tr = torch.tensor([epoch2accs_tr[k] for k in sorted(epoch2accs_tr)])
+    max_up_to_idx = torch.tensor([torch.max(accs_tr[:idx]) for idx in range(1, len(accs_tr)+1)])
+    delta_from_max_tr = torch.min(accs_tr - max_up_to_idx)
+
+    accs_val = torch.tensor([epoch2accs_val[k] for k in sorted(epoch2accs_val)])
+    max_up_to_idx = torch.tensor([torch.max(accs_val[:idx]) for idx in range(1, len(accs_val)+1)])
+    delta_from_max_val = torch.min(accs_val - max_up_to_idx)
+
+    return {"acc/mlp_probe_max/tr": torch.max(accs_tr),
+        "acc/mlp_probe_start/tr": accs_tr[0],
+        "acc/mlp_probe_end/tr": accs_tr[-1],
+        "acc/mlp_probe_max_delta_from_prior_max/tr": delta_from_max_tr,
+        "acc/mlp_probe_max/val": torch.max(accs_val),
+        "acc/mlp_probe_start/val": accs_val[0],
+        "acc/mlp_probe_end/val": accs_val[-1],
+        "acc/mlp_probe_max_delta_from_prior_max/val": delta_from_max_val}
 
 
 def noised_linear_probe(loader_tr, loader_val, args):

@@ -46,6 +46,8 @@ def parser_with_logging_args(P):
         help="Save the run every SAVE_ITER epochs/samplings.")
     P.add_argument("--probe_iter", default=5, type=int,
         help="Probe every PROBE_ITER epochs/samplings. Must be multiple of EVAL_ITER")
+    P.add_argument("--probe_eval_iter", default=10, type=int,
+        help="Evaluate the probe every PROBE_EVAL_ITER epochs during probing")
     P.add_argument("--num_eval_images", type=int, default=10,
         help="Number of images generate to generate from when logging images during evaluation")
     P.add_argument("--num_eval_samples", type=int, default=10,
@@ -70,9 +72,9 @@ def parser_with_training_args(P):
         help="Dimensionality of the features extracted by the model")
     P.add_argument("--leaky_relu", type=int, default=0, choices=[0, 1],
         help="Use LeakyReLU instead of ReLU")
-    P.add_argument("--lrs", default=[0, 1e-3], type=float, nargs="*",
+    P.add_argument("--lrs", default=[0, 1e-5], type=float, nargs="*",
         help="Learning rates. Even indices give step indices, odd indices give the learning rate to start at the step given at the prior index.")
-    P.add_argument("--epochs",type=int, default=1000,
+    P.add_argument("--epochs",type=int, default=5000,
         help="Number of epochs/samplings")
     P.add_argument("--bs",type=int, default=1000,
         help="Batch size")
@@ -91,7 +93,7 @@ def parser_with_probe_args(P):
         help="Whether the probe should include an MLP")
     P.add_argument("--probe_include_codes", choices=[0, 1, 2], default=0, type=int,
         help="Whether the probe should include noise. 2 does it both ways")
-    P.add_argument("--probe_verbosity", choices=[0, 1], default=0, type=int,
+    P.add_argument("--probe_verbosity", choices=[0, 1], default=1, type=int,
         help="Probe verbosity.")
     return P
 

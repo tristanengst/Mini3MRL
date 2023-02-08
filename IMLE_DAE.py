@@ -60,10 +60,50 @@ def evaluate(model, data_tr, data_val, scheduler, args, cur_step, nxz_data_tr=No
         dataset=data_val,
         args=args)
 
-    # Generate 2D embeddings
-    embeds_tr = ImageLatentDataset.generate_embeddings(nxz_data_tr, model, args)
-    embeds_val = ImageLatentDataset.generate_embeddings(nxz_data_val, model, args)
+    # Generate embeddings.
+    embeds_post_fuse_tr, targets_post_fuse_tr = ImageLatentDataset.generate_embeddings(nxz_data_tr, model, args, mode="post_fuse")
+    embeds_pre_fuse_tr, targets_pre_fuse_tr = ImageLatentDataset.generate_embeddings(nxz_data_tr, model, args, mode="pre_fuse")
+    embeds_post_fuse_val, targets_post_fuse_val = ImageLatentDataset.generate_embeddings(nxz_data_val, model, args, mode="post_fuse")
+    embeds_pre_fuse_val, targets_pre_fuse_val = ImageLatentDataset.generate_embeddings(nxz_data_val, model, args, mode="pre_fuse")
+    embeds_no_noise_tr, targets_no_noise_tr = ImageLatentDataset.generate_embeddings(nxz_data_tr, model, args, mode="no_noise")
+    embeds_no_noise_val, targets_no_noise_val = ImageLatentDataset.generate_embeddings(nxz_data_val, model, args, mode="no_noise")
 
+    embedding_results = {
+        "embeds/post_fuse_vis/tr": wandb.Image(Utils.embeddings_to_pil_image(embeds_post_fuse_tr, targets_post_fuse_tr)),
+        "embeds/pre_fuse_vis/tr": wandb.Image(Utils.embeddings_to_pil_image(embeds_pre_fuse_tr, targets_pre_fuse_tr)),
+        "embeds/no_noise_vis/tr": wandb.Image(Utils.embeddings_to_pil_image(embeds_no_noise_tr, targets_no_noise_tr)),
+        "embeds/post_fuse_vis/val": wandb.Image(Utils.embeddings_to_pil_image(embeds_post_fuse_val, targets_post_fuse_val)),
+        "embeds/pre_fuse_vis/val": wandb.Image(Utils.embeddings_to_pil_image(embeds_pre_fuse_val, targets_pre_fuse_val)),
+        "embeds/no_noise_vis/val": wandb.Image(Utils.embeddings_to_pil_image(embeds_no_noise_val, targets_no_noise_val)),
+
+        "embeds/post_fuse_mean/tr": torch.mean(embeds_post_fuse_tr),
+        "embeds/pre_fuse_mean/tr": torch.mean(embeds_pre_fuse_tr),
+        "embeds/post_fuse_std/tr": torch.std(embeds_post_fuse_tr),
+        "embeds/pre_fuse_std/tr": torch.std(embeds_pre_fuse_tr),
+        "embeds/post_fuse_mean_of_std/tr": torch.mean(torch.std(embeds_post_fuse_tr, dim=1)),
+        "embeds/pre_fuse_mean_of_std/tr": torch.mean(torch.std(embeds_pre_fuse_tr, dim=1)),
+        "embeds/post_fuse_abs/tr": torch.mean(torch.abs(embeds_post_fuse_tr)),
+        "embeds/pre_fuse_abs/tr": torch.mean(torch.abs(embeds_pre_fuse_tr)),
+
+        "embeds/no_noise_mean/val": torch.mean(embeds_no_noise_val),
+        "embeds/no_noise_std/val": torch.std(embeds_no_noise_val),
+        "embeds/no_noise_mean_of_std/val": torch.mean(torch.std(embeds_no_noise_val, dim=1)),
+        "embeds/no_noise_abs/val": torch.mean(torch.abs(embeds_no_noise_val)),
+        "embeds/no_noise_mean/val": torch.mean(embeds_no_noise_val),
+        "embeds/no_noise_std/val": torch.std(embeds_no_noise_val),
+        "embeds/no_noise_mean_of_std/val": torch.mean(torch.std(embeds_no_noise_val, dim=1)),
+        "embeds/no_noise_abs/val": torch.mean(torch.abs(embeds_no_noise_val)),
+
+        "embeds/post_fuse_mean/val": torch.mean(embeds_post_fuse_val),
+        "embeds/pre_fuse_mean/val": torch.mean(embeds_pre_fuse_val),
+        "embeds/post_fuse_std/val": torch.std(embeds_post_fuse_val),
+        "embeds/pre_fuse_std/val": torch.std(embeds_pre_fuse_val),
+        "embeds/post_fuse_mean_of_std/val": torch.mean(torch.std(embeds_post_fuse_val, dim=1)),
+        "embeds/pre_fuse_mean_of_std/val": torch.mean(torch.std(embeds_pre_fuse_val, dim=1)),
+        "embeds/post_fuse_abs/val": torch.mean(torch.abs(embeds_post_fuse_val)),
+        "embeds/pre_fuse_abs/val": torch.mean(torch.abs(embeds_pre_fuse_val)),
+    }
+    
     # Generate images
     image_save_folder = f"{imle_model_folder(args, make_folder=True)}/images"
     Utils.conditional_make_folder(image_save_folder)
@@ -78,7 +118,6 @@ def evaluate(model, data_tr, data_val, scheduler, args, cur_step, nxz_data_tr=No
     loss_val_min = ImageLatentDataset.eval_model(nxz_data_val, model, args, use_sampled_codes=True)
     loss_val_mean = ImageLatentDataset.eval_model(nxz_data_val, model, args, use_sampled_codes=False)
 
-    # Evaluate on the probing task
     loader_tr = DataLoader(data_tr,
         batch_size=args.bs,
         shuffle=True,
@@ -89,23 +128,20 @@ def evaluate(model, data_tr, data_val, scheduler, args, cur_step, nxz_data_tr=No
         num_workers=args.num_workers,
         pin_memory=True)
 
+    tqdm.write(f"Step {cur_step}/{len(loader_tr) * args.ipe * args.epochs} - lr={scheduler.get_lr():.5e} loss/min/tr={loss_tr_min:.5f} loss/min/val={loss_val_min:.5f} loss/mean/tr={loss_tr_mean:.5f} loss/mean/val={loss_val_mean:.5f}")
+
+    # Evaluate on the probing task
     epoch = cur_step / (len(loader_tr) * args.ipe)
     if epoch % args.probe_iter == 0 or epoch == args.epochs - 1:
         probe_results = LinearProbe.probe(model, loader_tr, loader_val, args)
-        probe_str = " ".join([f"{k}={v:.5f}" for k,v in probe_results.items()])
     else:
         probe_results = {}
-        probe_str = ""
-    
-    tqdm.write(f"Step {cur_step}/{len(loader_tr) * args.ipe * args.epochs} - lr={scheduler.get_lr():.5e} loss/min/tr={loss_tr_min:.5f} loss/min/val={loss_val_min:.5f} loss/mean/tr={loss_tr_mean:.5f} loss/mean/val={loss_val_mean:.5f} {probe_str}")
 
-    wandb.log(probe_results | {
+    wandb.log(probe_results | embedding_results | {
         "loss/min/tr": loss_tr_min,
         "loss/min/val": loss_val_min,
         "loss/mean/tr": loss_tr_mean,
         "loss/mean/val": loss_val_mean,
-        "embeds/tr": wandb.Image(embeds_tr),
-        "embeds/val": wandb.Image(embeds_val),
         "lr": scheduler.get_lr(),
         "train_step": cur_step,
         "images/val": wandb.Image(f"{image_save_folder}/{cur_step}_val.png"),
@@ -127,10 +163,13 @@ class ImageLatentDataset(Dataset):
         return self.noised_images[idx], self.latents[idx], self.images[idx]
 
     @staticmethod
-    def generate_embeddings(nxz_data, model, args, use_sampled_codes=True, k=1000):
+    def generate_embeddings(nxz_data, model, args, mode="post_fuse", use_sampled_codes=True, k=1000):
         """Returns a WandB Table of embeddings generated by [model] on
         [nxz_data]. To reduce data usage, [k] samples are selected randomly
-        according to [args.seed]
+        according to [args.seed].
+
+        Args:
+        post_fuse   -- get embeddings after or before fusing them with codes
         """
         idxs = Utils.sample(range(len(nxz_data)), k=k, seed=args.seed)
         data = Subset(Data.ZipDataset(nxz_data.data, nxz_data), indices=idxs)
@@ -139,28 +178,38 @@ class ImageLatentDataset(Dataset):
             num_workers=args.num_workers,
             shuffle=False,
             pin_memory=True)
-        encoder = Utils.de_dataparallel(model).to_encoder_with_ada_in(
-            use_mean_representation=False)
-        encoder = nn.DataParallel(encoder, device_ids=args.gpus).to(device)
 
+        if mode == "post_fuse":
+            encoder = Utils.de_dataparallel(model).to_encoder_with_ada_in(
+                use_mean_representation=False)
+        else:
+            encoder = Utils.de_dataparallel(model).encoder
+        encoder = nn.DataParallel(encoder, device_ids=args.gpus).to(device)
+        
         with torch.no_grad():
             embeddings, targets = [], []
-            for (_,y),(xn,z,_) in tqdm(loader,
-                desc="Evaluating on ImageLatentDataset",
+            for (x,y),(xn,z,_) in tqdm(loader,
+                desc="Generating embeddings for ImageLatentDataset [mode={mode}]",
                 total=len(loader),
                 leave=False,
                 dynamic_ncols=True):
 
-                xn = xn.to(device, non_blocking=True)
-                z = z.to(device, non_blocking=True) if use_sampled_codes else None
-                fxn = encoder(xn, z).cpu()
+                if mode == "no_noise":
+                    model_input = (x.to(device, non_blocking=True),)
+                elif mode == "pre_fuse":
+                    model_input = (xn.to(device, non_blocking=True),)
+                elif mode == "post_fuse":
+                    z = z.to(device, non_blocking=True) if use_sampled_codes else None
+                    model_input = (xn.to(device, non_blocking=True), z)
+                    
+                fxn = encoder(*model_input).cpu()
 
                 embeddings.append(fxn)
                 targets.append(y)
         
         embeddings = torch.cat(embeddings, dim=0)
         targets = torch.cat(targets, dim=0).view(-1)
-        return Utils.embeddings_to_pil_image(embeddings, targets)
+        return embeddings, targets
         
     @staticmethod
     def generate_images(nxz_data, model, args, idxs=None, num_images=None, num_samples=None, seed=None):
@@ -197,7 +246,7 @@ class ImageLatentDataset(Dataset):
         with torch.no_grad():
             inputs, noised_inputs, generates = [], [], []
             for (x,_),(nx,_,_) in tqdm(loader,
-                desc="Generating images",
+                desc="Generating images from ImageLatentDataset",
                 total=len(loader),
                 leave=False,
                 dynamic_ncols=True):
