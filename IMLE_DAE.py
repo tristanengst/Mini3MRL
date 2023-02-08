@@ -458,7 +458,8 @@ if __name__ == "__main__":
         _ = evaluate(model, data_tr, data_val, scheduler, args, cur_step,
             nxz_data_tr=epoch_dataset)
         
-        if not args.save_iter == 0 and epoch % args.save_iter == 0:
+        if ((not args.save_iter == 0 and epoch % args.save_iter == 0)
+            or epoch in args.save_epochs):
             _ = Utils.save_state(model, optimizer,
                 args=args,
                 epoch=epoch,

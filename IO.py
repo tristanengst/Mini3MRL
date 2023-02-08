@@ -44,6 +44,8 @@ def parser_with_logging_args(P):
         help="Evaluate on the proxy task every EVAL_ITER epochs/samplings.")
     P.add_argument("--save_iter", default=0, type=int,
         help="Save the run every SAVE_ITER epochs/samplings.")
+    P.add_argument("--save_epochs", nargs="*", default=[], type=int,
+        help="List of epoch indices on which to necessarily save the model.")
     P.add_argument("--probe_iter", default=5, type=int,
         help="Probe every PROBE_ITER epochs/samplings. Must be multiple of EVAL_ITER")
     P.add_argument("--probe_eval_iter", default=10, type=int,
