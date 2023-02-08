@@ -102,4 +102,6 @@ def parser_with_imle_args(P):
         help="Number of images to sample codes for at once")
     P.add_argument("--ipe", default=50, type=int,
         help="Number of gradient steps per code.")
+    P.add_argument("--latent_arch", choices=["v0", "v1", "v2"], default="v0",
+        help="Architecture for noise injection")
     return P

@@ -72,7 +72,14 @@ class IMLE_DAE_MLP(nn.Module):
         self.code_dim = 512
         self.encoder = MLPEncoder(**vars(args))
         self.decoder = MLPDecoder(**vars(args))
-        self.ada_in = AdaIN(self.encoder.feat_dim)
+
+        if args.latent_arch == "v0":
+            self.ada_in = AdaIN(self.encoder.feat_dim)
+        elif args.latent_arch == "v1":
+            self.ada_in = AdaINV1(self.encoder.feat_dim)
+        elif args.latent_arch == "v2":
+            self.encoder = MLPEncoder(**vars(args) | {"feat_dim": args.feat_dim * 2})
+            self.ada_in = AdaINV2(self.encoder.feat_dim)
 
     def get_codes(self, bs, device="cpu", seed=None):
         """Returns [bs] latent codes to be passed into the model.
@@ -149,14 +156,73 @@ class EncoderWithAdaIn(nn.Module):
             fx = self.encoder(x)
             return self.ada_in(fx, z)
         
+class AdaINV2(nn.Module):
+    def __init__(self, c, epsilon=1e-8, act_type="leakyrelu", normalize_z=True):
+        super(AdaINV2, self).__init__()
+        self.register_buffer("epsilon", torch.tensor(epsilon))
+        assert c % 2 == 0
+        self.c = c // 2 # The input c is the feature dimension. This means the
+            # linear probes for this model get 2x the features
+
+        layers = []
+        if normalize_z:
+            layers.append(("normalize_z", PixelNormLayer(epsilon=epsilon)))
+        layers.append(("mapping_net", MLP(in_dim=512,
+            h_dim=512,
+            layers=8,
+            out_dim=self.c * 2,
+            equalized_lr=True,
+            act_type=act_type)))
+
+        self.model = nn.Sequential(OrderedDict(layers))
+
+    def forward(self, x, z):
+        z = self.model(z)
+        z_mean = z[:, :self.c]
+        z_std = z[:, self.c:]
+
+        z_shift = nn.functional.normalize(z_mean, dim=1)
+        z_scale = (torch.sigmoid(z_std) * 2) - 1
+
+        x_shift = x[:, :self.c]
+        x_scale = x[:, self.c:]
+ 
+        x_scale = torch.repeat_interleave(x_scale, z.shape[0] // x.shape[0], dim=0)
+        x_shift = torch.repeat_interleave(x_shift, z.shape[0] // x.shape[0], dim=0)
+
+        return x_shift + z_shift + x_scale * z_scale
+
+class AdaINV1(nn.Module):
+    def __init__(self, c, epsilon=1e-8, act_type="leakyrelu", normalize_z=True):
+        super(AdaINV1, self).__init__()
+        self.register_buffer("epsilon", torch.tensor(epsilon))
+        self.c = c
+
+        layers = []
+        if normalize_z:
+            layers.append(("normalize_z", PixelNormLayer(epsilon=epsilon)))
+        layers.append(("mapping_net", MLP(in_dim=512,
+            h_dim=512,
+            layers=8,
+            out_dim=self.c * 2,
+            equalized_lr=True,
+            act_type=act_type)))
+
+        self.model = nn.Sequential(OrderedDict(layers))
+
+    def forward(self, x, z):
+        z = self.model(z)
+        z_mean = z[:, :self.c]
+        z_std = z[:, self.c:]
+
+        z_shift = nn.functional.normalize(z_mean, dim=1)
+        z_scale = nn.functional.softmax(z_std, dim=1)
+        x = torch.repeat_interleave(x, z.shape[0] // x.shape[0], dim=0)
+        result = z_shift + x * (1 + z_scale)
+        return result
 
 class AdaIN(nn.Module):
-    """AdaIN adapted for a transformer. Expects a BSxNPxC batch of images, where
-    each image is represented as a set of P tokens, and BSxPxZ noise. This noise
-    is mapped to be BSx1x2C. These are used to scale the image patches, ie. in
-    the ith image, the kth element of the jth patch is scaled identically to the
-    kth element of any other patch in that image.
-    """
+
     def __init__(self, c, epsilon=1e-8, act_type="leakyrelu", normalize_z=True):
         super(AdaIN, self).__init__()
         self.register_buffer("epsilon", torch.tensor(epsilon))

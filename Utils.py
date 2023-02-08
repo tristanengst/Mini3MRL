@@ -2,6 +2,7 @@ import argparse
 from collections import OrderedDict, defaultdict
 import numpy as np
 import os
+import plotly.express as px
 from PIL import Image
 import random
 import torch
@@ -126,27 +127,27 @@ def images_to_pil_image(images):
     return Image.open(buf)
 
 def embeddings_to_pil_image(embeddings, classes, method="plain"):
-    """
+    """Returns a PIL image of [embeddings] and [classes] represented in feature
+    space.
+
     Args:
-    classes -- N-dimensional tensor of classes
+    embeddings  -- NxD tensor of model embeddings
+    classes     -- N-dimensional tensor of classes
+    method      -- method by which to represent the data
     """
+    n,d = embeddings.shape
     embeddings = embeddings.cpu().numpy()
     classes = [str(c) for c in classes.cpu().numpy().tolist()]
-    n,d = embeddings.shape
-
-    import plotly.express as px
-
     if d == 2 and method == "plain":
         fig = px.scatter(x=embeddings[:, 0], y=embeddings[:, 1], color=classes)
         return Image.open(io.BytesIO(fig.to_image(format="png")))
     else:
-        raise NotImplementedError()
+        tqdm.write(f"Not implemented for higher dimensional feature spaces, outputting image of zeros instead")
+        return Image.fromarray(np.zeros(shape=(128,128), dtype=np.int8))
 
 def de_dataparallel(model):
-    if isinstance(model, nn.DataParallel):
-        return model.module
-    else:
-        return model
+    return model.module if isinstance(model, nn.DataParallel) else model
+
 
 def sorted_namespace(args):
     """Returns argparse Namespace [args] after sorting the args in it by key
