@@ -53,7 +53,7 @@ lock_file = ".wandb_sync_lock_file"
 if os.path.exists(lock_file) and not args.force:
     with open(lock_file, "r+") as f:
         contents = f.read()
-    tqdm.write(f"Lock file exists with content\n{content}\n\nEnding.")
+    tqdm.write(f"Lock file exists with content\n{contents}\n\nEnding.")
 else:
     if not args.force:
         with open(lock_file, "w+") as f:
