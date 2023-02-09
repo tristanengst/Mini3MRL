@@ -154,6 +154,8 @@ def linear_probe(model, loader_tr, loader_val, args, **kwargs):
         "acc/linear_probe_max/val": torch.max(accs_val),
         "acc/linear_probe_start/val": accs_val[0],
         "acc/linear_probe_end/val": accs_val[-1],
+        "acc/linear_probe_std/tr": torch.std(accs_tr),
+        "acc/linear_probe_std/val": torch.std(accs_val),
         "acc/linear_probe_max_delta_from_prior_max/val": delta_from_max_val}
 
 def mlp_probe(model, loader_tr, loader_val, args, **kwargs):
@@ -214,6 +216,8 @@ def mlp_probe(model, loader_tr, loader_val, args, **kwargs):
         "acc/mlp_probe_max/val": torch.max(accs_val),
         "acc/mlp_probe_start/val": accs_val[0],
         "acc/mlp_probe_end/val": accs_val[-1],
+        "acc/mlp_probe_std/tr": torch.std(accs_tr),
+        "acc/mlp_probe_std/val": torch.std(accs_val),
         "acc/mlp_probe_max_delta_from_prior_max/val": delta_from_max_val}
 
 
