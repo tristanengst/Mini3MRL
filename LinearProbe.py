@@ -109,6 +109,7 @@ def linear_probe(model, loader_tr, loader_val, args, **kwargs):
     scheduler = Utils.StepScheduler(optimizer, args.probe_lrs)
     
     epoch2accs_tr, epoch2accs_val = {}, {}
+    losses_tr, losses_val = [], []
     for e in tqdm(range(args.probe_epochs),
         desc="Probe Epochs",
         leave=False,
@@ -129,6 +130,8 @@ def linear_probe(model, loader_tr, loader_val, args, **kwargs):
             loss_val, acc_val = evaluate_probe(model, loader_val, args)
             epoch2accs_tr[e] = acc_tr
             epoch2accs_val[e] =  acc_val
+            losses_tr.append(loss_tr)
+            losses_val.append(loss_val)
 
     if args.probe_verbosity > 0:
         eval_str = f"\tLinear probe epoch to accuracy (train/val): "
@@ -147,6 +150,9 @@ def linear_probe(model, loader_tr, loader_val, args, **kwargs):
     max_up_to_idx = torch.tensor([torch.max(accs_val[:idx]) for idx in range(1, len(accs_val)+1)])
     delta_from_max_val = torch.min(accs_val - max_up_to_idx)
 
+    losses_tr = torch.tensor(losses_tr)
+    losses_val = torch.tensor(losses_val)
+
     return {"acc/linear_probe_max/tr": torch.max(accs_tr),
         "acc/linear_probe_start/tr": accs_tr[0],
         "acc/linear_probe_end/tr": accs_tr[-1],
@@ -154,8 +160,8 @@ def linear_probe(model, loader_tr, loader_val, args, **kwargs):
         "acc/linear_probe_max/val": torch.max(accs_val),
         "acc/linear_probe_start/val": accs_val[0],
         "acc/linear_probe_end/val": accs_val[-1],
-        "acc/linear_probe_std/tr": torch.std(accs_tr),
-        "acc/linear_probe_std/val": torch.std(accs_val),
+        "loss/linear_probe_std/tr": torch.std(losses_tr),
+        "loss/linear_probe_std/val": torch.std(losses_val),
         "acc/linear_probe_max_delta_from_prior_max/val": delta_from_max_val}
 
 def mlp_probe(model, loader_tr, loader_val, args, **kwargs):
@@ -171,6 +177,7 @@ def mlp_probe(model, loader_tr, loader_val, args, **kwargs):
     scheduler = Utils.StepScheduler(optimizer, args.probe_lrs)
 
     epoch2accs_tr, epoch2accs_val = {}, {}
+    losses_tr, losses_val = [], []
     for e in tqdm(range(args.probe_epochs),
         desc="Probe Epochs",
         leave=False,
@@ -191,6 +198,8 @@ def mlp_probe(model, loader_tr, loader_val, args, **kwargs):
             loss_val, acc_val = evaluate_probe(model, loader_val, args)
             epoch2accs_tr[e] = acc_tr
             epoch2accs_val[e] =  acc_val
+            losses_tr.append(loss_tr)
+            losses_val.append(loss_val)
 
     if args.probe_verbosity > 0:
         eval_str = f"\tMLP probe epoch to accuracy (train/val): "
@@ -209,6 +218,9 @@ def mlp_probe(model, loader_tr, loader_val, args, **kwargs):
     max_up_to_idx = torch.tensor([torch.max(accs_val[:idx]) for idx in range(1, len(accs_val)+1)])
     delta_from_max_val = torch.min(accs_val - max_up_to_idx)
 
+    losses_tr = torch.tensor(losses_tr)
+    losses_val = torch.tensor(losses_val)
+
     return {"acc/mlp_probe_max/tr": torch.max(accs_tr),
         "acc/mlp_probe_start/tr": accs_tr[0],
         "acc/mlp_probe_end/tr": accs_tr[-1],
@@ -216,8 +228,8 @@ def mlp_probe(model, loader_tr, loader_val, args, **kwargs):
         "acc/mlp_probe_max/val": torch.max(accs_val),
         "acc/mlp_probe_start/val": accs_val[0],
         "acc/mlp_probe_end/val": accs_val[-1],
-        "acc/mlp_probe_std/tr": torch.std(accs_tr),
-        "acc/mlp_probe_std/val": torch.std(accs_val),
+        "loss/linear_probe_std/tr": torch.std(losses_tr),
+        "loss/linear_probe_std/val": torch.std(losses_val),
         "acc/mlp_probe_max_delta_from_prior_max/val": delta_from_max_val}
 
 
