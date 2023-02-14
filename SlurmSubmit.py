@@ -69,14 +69,14 @@ if __name__ == "__main__":
         args, file_move_command = get_args_with_data_on_node(args,
             arg_names_to_move=["data_tr", "data_val"])
         num_gpus = len(args.gpus)
-        num_cpus = min(24, max(1, num_gpus) * 12)
+        num_cpus = min(12, max(1, num_gpus) * 12)
     elif slurm_args.script == "IMLE_DAE.py":
         args = IMLE_DAE.get_args(unparsed_args)
         args, file_move_command = get_args_with_data_on_node(args,
             arg_names_to_move=["data_tr", "data_val"])
         name = os.path.basename(IMLE_DAE.imle_model_folder(args))
         num_gpus = len(args.gpus)
-        num_cpus = min(24, max(1, num_gpus) * 12)
+        num_cpus = min(12, max(1, num_gpus) * 12)
     else:
         raise NotImplementedError()
 
