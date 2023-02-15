@@ -369,9 +369,6 @@ def get_args(args=None):
     args.script = "imle" if args.script is None else args.script
     args.lrs = Utils.StepScheduler.process_lrs(args.lrs)
     args.probe_lrs = Utils.StepScheduler.process_lrs(args.probe_lrs)
-
-    assert args.probe_iter % args.eval_iter == 0
-
     return args
 
 if __name__ == "__main__":

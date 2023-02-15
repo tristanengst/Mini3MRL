@@ -15,29 +15,19 @@ def get_model(args, imle=False):
         return IMLE_DAE_MLP(args)
     elif args.arch == "mlp" and not imle:
         return DAE_MLP(args)
-    elif args.arch == "mlp_bn" and imle:
-        return IMLE_DAE_MLP(args)
-    elif args.arch == "mlp_ln" and imle:
-        return IMLE_DAE_MLP(args)
     else:
         raise NotImplementedError()
 
 class MLPEncoder(nn.Module):
 
-    def __init__(self, in_dim=784, h_dim=1024, feat_dim=64, leaky_relu=False, arch="mlp", **kwargs):
+    def __init__(self, in_dim=784, h_dim=1024, feat_dim=64, leaky_relu=False, **kwargs):
         super(MLPEncoder, self).__init__()
         self.lin1 = nn.Linear(in_dim, h_dim)
         self.relu = nn.ReLU(True)
         self.lin2 = nn.Linear(h_dim, feat_dim)
+        self.out = nn.LeakyReLU(negative_slope=.2) if leaky_relu else nn.ReLU(True)
         
         self.feat_dim = feat_dim
-        
-        if arch == "mlp":
-            self.out = nn.LeakyReLU(negative_slope=.2) if leaky_relu else nn.ReLU(True)
-        elif arch == "mlp_bn":
-            self.out = nn.BatchNorm1d(feat_dim, affine=False)
-        elif arch == "mlp_ln":
-            self.out = nn.LayerNorm(feat_dim, elementwise_affine=False)
     
     def forward(self, x):
         x = torch.flatten(x, start_dim=1)
@@ -81,14 +71,7 @@ class IMLE_DAE_MLP(nn.Module):
         self.code_dim = 512
         self.encoder = MLPEncoder(**vars(args))
         self.decoder = MLPDecoder(**vars(args))
-
-        if args.latent_arch == "v0":
-            self.ada_in = AdaIN(self.encoder.feat_dim)
-        elif args.latent_arch == "v1":
-            self.ada_in = AdaINV1(self.encoder.feat_dim)
-        elif args.latent_arch == "v2":
-            self.encoder = MLPEncoder(**vars(args) | {"feat_dim": args.feat_dim * 2})
-            self.ada_in = AdaINV2(self.encoder.feat_dim)
+        self.ada_in = AdaIN(self.encoder.feat_dim)
 
     def get_codes(self, bs, device="cpu", seed=None):
         """Returns [bs] latent codes to be passed into the model.
@@ -164,71 +147,6 @@ class EncoderWithAdaIn(nn.Module):
                 z = self.get_codes(len(x) * num_z, device=x.device, seed=seed)
             fx = self.encoder(x)
             return self.ada_in(fx, z)
-        
-class AdaINV2(nn.Module):
-    def __init__(self, c, epsilon=1e-8, act_type="leakyrelu", normalize_z=True):
-        super(AdaINV2, self).__init__()
-        self.register_buffer("epsilon", torch.tensor(epsilon))
-        assert c % 2 == 0
-        self.c = c // 2 # The input c is the feature dimension. This means the
-            # linear probes for this model get 2x the features
-
-        layers = []
-        if normalize_z:
-            layers.append(("normalize_z", PixelNormLayer(epsilon=epsilon)))
-        layers.append(("mapping_net", MLP(in_dim=512,
-            h_dim=512,
-            layers=8,
-            out_dim=self.c * 2,
-            equalized_lr=True,
-            act_type=act_type)))
-
-        self.model = nn.Sequential(OrderedDict(layers))
-
-    def forward(self, x, z):
-        z = self.model(z)
-        z_mean = z[:, :self.c]
-        z_std = z[:, self.c:]
-
-        z_shift = nn.functional.normalize(z_mean, dim=1)
-        z_scale = (torch.sigmoid(z_std) * 2) - 1
-
-        x_shift = x[:, :self.c]
-        x_scale = x[:, self.c:]
- 
-        x_scale = torch.repeat_interleave(x_scale, z.shape[0] // x.shape[0], dim=0)
-        x_shift = torch.repeat_interleave(x_shift, z.shape[0] // x.shape[0], dim=0)
-
-        return x_shift + z_shift + x_scale * z_scale
-
-class AdaINV1(nn.Module):
-    def __init__(self, c, epsilon=1e-8, act_type="leakyrelu", normalize_z=True):
-        super(AdaINV1, self).__init__()
-        self.register_buffer("epsilon", torch.tensor(epsilon))
-        self.c = c
-
-        layers = []
-        if normalize_z:
-            layers.append(("normalize_z", PixelNormLayer(epsilon=epsilon)))
-        layers.append(("mapping_net", MLP(in_dim=512,
-            h_dim=512,
-            layers=8,
-            out_dim=self.c * 2,
-            equalized_lr=True,
-            act_type=act_type)))
-
-        self.model = nn.Sequential(OrderedDict(layers))
-
-    def forward(self, x, z):
-        z = self.model(z)
-        z_mean = z[:, :self.c]
-        z_std = z[:, self.c:]
-
-        z_shift = nn.functional.normalize(z_mean, dim=1)
-        z_scale = nn.functional.softmax(z_std, dim=1)
-        x = torch.repeat_interleave(x, z.shape[0] // x.shape[0], dim=0)
-        result = z_shift + x * (1 + z_scale)
-        return result
 
 class AdaIN(nn.Module):
 
@@ -252,8 +170,8 @@ class AdaIN(nn.Module):
     def forward(self, x, z):
         """
         Args:
-        x   -- image features
-        z   -- latent codes
+        x   -- NxD image features
+        z   -- (N*k)xCODE_DIM latent codes
         """
         z = self.model(z)
         z_mean = z[:, :self.c]
