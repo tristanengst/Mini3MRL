@@ -97,6 +97,8 @@ def parser_with_probe_args(P):
         help="Whether the probe should include noise. 2 does it both ways")
     P.add_argument("--probe_verbosity", choices=[0, 1], default=1, type=int,
         help="Probe verbosity.")
+    P.add_argument("--probe_normalize_feats", choices=[0, 1], default=0, type=int,
+        help="Probe verbosity.")
     return P
 
 def parser_with_imle_args(P):

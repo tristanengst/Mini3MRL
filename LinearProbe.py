@@ -57,14 +57,21 @@ class ProbeWithBackbone(nn.Module):
     encoder     -- encoder behind probe
     num_classes -- number of classes to predict
     """
-    def __init__(self, encoder, num_classes=10):
+    def __init__(self, encoder, probe_normalize_feats=False, num_classes=10, **kwargs):
         super(ProbeWithBackbone, self).__init__()
         self.encoder = encoder
         self.probe = nn.Linear(encoder.feat_dim, num_classes)
+        self.probe_normalize_feats = probe_normalize_feats
 
     def forward(self, x):
         with torch.no_grad():
             fx = self.encoder(x)
+
+            if self.probe_normalize_feats:
+                fx_mean = torch.mean(fx, dim=0)
+                fx_std = torch.std(fx, dim=0)
+                fx = (fx - fx_mean) / (fx_std + 1e-8)
+
         return self.probe(fx)
 
 class MLPProbeWithBackbone(ProbeWithBackbone):
@@ -75,8 +82,8 @@ class MLPProbeWithBackbone(ProbeWithBackbone):
     encoder     -- encoder behind probe
     num_classes -- number of classes to predict
     """
-    def __init__(self, encoder, num_classes=10):
-        super(MLPProbeWithBackbone, self).__init__(encoder)
+    def __init__(self, encoder, num_classes=10, **kwargs):
+        super(MLPProbeWithBackbone, self).__init__(encoder, **kwargs)
         self.probe = torchvision.ops.MLP(encoder.feat_dim, [512, 512, num_classes])
         
 def evaluate_probe(model, loader, args, noise=False):
@@ -101,7 +108,7 @@ def linear_probe(model, loader_tr, loader_val, args, **kwargs):
     representations of the encoder of [model] run on [loader_tr].
     """
     backbone = get_encoder_from_model(model, **kwargs)
-    model = ProbeWithBackbone(backbone).to(device)
+    model = ProbeWithBackbone(backbone, **vars(args)).to(device)
     loss_fn = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.probe.parameters(),
         lr=args.probe_lrs[1],
@@ -177,7 +184,7 @@ def mlp_probe(model, loader_tr, loader_val, args, **kwargs):
     representations of the encoder of [model] run on [loader_tr].
     """
     backbone = get_encoder_from_model(model, **kwargs)
-    model = MLPProbeWithBackbone(backbone).to(device)
+    model = MLPProbeWithBackbone(backbone, **vars(args)).to(device)
     loss_fn = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.probe.parameters(),
         lr=args.probe_lrs[1],
