@@ -166,6 +166,7 @@ class AdaIN(nn.Module):
             act_type=act_type)))
 
         self.model = nn.Sequential(OrderedDict(layers))
+        self.x_pix_norm = PixelNormLayer()
 
     def forward(self, x, z):
         """
@@ -174,11 +175,13 @@ class AdaIN(nn.Module):
         z   -- (N*k)xCODE_DIM latent codes
         """
         z = self.model(z)
-        z_mean = z[:, :self.c]
-        z_std = z[:, self.c:]
+        z_shift = z[:, :self.c]
+        z_scale = z[:, self.c:]
+
+        x = self.x_pix_norm(x)
 
         x = torch.repeat_interleave(x, z.shape[0] // x.shape[0], dim=0)
-        result = z_mean + x * (1 + z_std)
+        result = z_shift + x * (1 + z_scale)
         return result
 
 def get_act(act_type):

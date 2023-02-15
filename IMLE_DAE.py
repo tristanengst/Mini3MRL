@@ -133,7 +133,11 @@ def evaluate(model, data_tr, data_val, scheduler, args, cur_step, nxz_data_tr=No
     tqdm.write(f"Step {cur_step}/{len(loader_tr) * args.ipe * args.epochs} - lr={scheduler.get_lr():.5e} loss/min/tr={loss_tr_min:.5f} loss/min/val={loss_val_min:.5f} loss/mean/tr={loss_tr_mean:.5f} loss/mean/val={loss_val_mean:.5f}")
 
     # Evaluate on the probing task
-    probe_results = LinearProbe.probe(model, loader_tr, loader_val, args)
+    if (cur_step // (len(loader_tr) * args.ipe)) % args.probe_iter == 0:
+        probe_results = LinearProbe.probe(model, loader_tr, loader_val, args)
+    else:
+        tqdm.write(f"Computed epoch as {cur_step // (len(loader_tr) * args.ipe)}; not probing")
+        probe_results = {}
 
     wandb.log(probe_results | embedding_results | {
         "loss/min/tr": loss_tr_min,
