@@ -15,27 +15,36 @@ def get_model(args, imle=False):
         return IMLE_DAE_MLP(args)
     elif args.arch == "mlp" and not imle:
         return DAE_MLP(args)
-    # Add other architectures here
+    elif args.arch == "mlp_bn" and imle:
+        return IMLE_DAE_MLP(args)
+    elif args.arch == "mlp_ln" and imle:
+        return IMLE_DAE_MLP(args)
     else:
         raise NotImplementedError()
 
 class MLPEncoder(nn.Module):
 
-    def __init__(self, in_dim=784, h_dim=1024, feat_dim=64, **kwargs):
+    def __init__(self, in_dim=784, h_dim=1024, feat_dim=64, leaky_relu=False, arch="mlp", **kwargs):
         super(MLPEncoder, self).__init__()
         self.lin1 = nn.Linear(in_dim, h_dim)
         self.relu = nn.ReLU(True)
         self.lin2 = nn.Linear(h_dim, feat_dim)
+        
         self.feat_dim = feat_dim
-
-        self.out_act = nn.ReLU(True) if not kwargs["leaky_relu"] else nn.LeakyReLU(negative_slope=.2)
+        
+        if arch == "mlp":
+            self.out = nn.LeakyReLU(negative_slope=.2) if leaky_relu else nn.ReLU(True)
+        elif arch == "mlp_bn":
+            self.out = nn.BatchNorm1d(feat_dim, affine=False)
+        elif arch == "mlp_ln":
+            self.out = nn.LayerNorm(feat_dim, elementwise_affine=False)
     
     def forward(self, x):
         x = torch.flatten(x, start_dim=1)
         fx = self.lin1(x)
         fx = self.relu(fx)
         fx = self.lin2(fx)
-        fx = self.out_act(fx) # It's better for this to be LeakyReLU
+        fx = self.out(fx)
         return fx
 
 class MLPDecoder(nn.Module):

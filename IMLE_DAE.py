@@ -70,47 +70,49 @@ def evaluate(model, data_tr, data_val, scheduler, args, cur_step, nxz_data_tr=No
 
     embedding_results = {
         "embeds/post_fuse_vis/tr": wandb.Image(Utils.embeddings_to_pil_image(embeds_post_fuse_tr, targets_post_fuse_tr)),
-        "embeds/pre_fuse_vis/tr": wandb.Image(Utils.embeddings_to_pil_image(embeds_pre_fuse_tr, targets_pre_fuse_tr)),
-        "embeds/no_noise_vis/tr": wandb.Image(Utils.embeddings_to_pil_image(embeds_no_noise_tr, targets_no_noise_tr)),
         "embeds/post_fuse_vis/val": wandb.Image(Utils.embeddings_to_pil_image(embeds_post_fuse_val, targets_post_fuse_val)),
+        "embeds/pre_fuse_vis/tr": wandb.Image(Utils.embeddings_to_pil_image(embeds_pre_fuse_tr, targets_pre_fuse_tr)),
         "embeds/pre_fuse_vis/val": wandb.Image(Utils.embeddings_to_pil_image(embeds_pre_fuse_val, targets_pre_fuse_val)),
+        "embeds/no_noise_vis/tr": wandb.Image(Utils.embeddings_to_pil_image(embeds_no_noise_tr, targets_no_noise_tr)),
         "embeds/no_noise_vis/val": wandb.Image(Utils.embeddings_to_pil_image(embeds_no_noise_val, targets_no_noise_val)),
 
         "embeds/post_fuse_mean/tr": torch.mean(embeds_post_fuse_tr),
-        "embeds/pre_fuse_mean/tr": torch.mean(embeds_pre_fuse_tr),
-        "embeds/post_fuse_std/tr": torch.std(embeds_post_fuse_tr),
-        "embeds/pre_fuse_std/tr": torch.std(embeds_pre_fuse_tr),
-        "embeds/post_fuse_mean_of_std/tr": torch.mean(torch.std(embeds_post_fuse_tr, dim=1)),
-        "embeds/pre_fuse_mean_of_std/tr": torch.mean(torch.std(embeds_pre_fuse_tr, dim=1)),
-        "embeds/post_fuse_abs/tr": torch.mean(torch.abs(embeds_post_fuse_tr)),
-        "embeds/pre_fuse_abs/tr": torch.mean(torch.abs(embeds_pre_fuse_tr)),
-
-        "embeds/no_noise_mean/tr": torch.mean(embeds_no_noise_tr),
-        "embeds/no_noise_std/tr": torch.std(embeds_no_noise_tr),
-        "embeds/no_noise_mean_of_std/tr": torch.mean(torch.std(embeds_no_noise_tr, dim=1)),
-        "embeds/no_noise_abs/tr": torch.mean(torch.abs(embeds_no_noise_tr)),
-        "embeds/no_noise_mean/val": torch.mean(embeds_no_noise_val),
-        "embeds/no_noise_std/val": torch.std(embeds_no_noise_val),
-        "embeds/no_noise_mean_of_std/val": torch.mean(torch.std(embeds_no_noise_val, dim=1)),
-        "embeds/no_noise_abs/val": torch.mean(torch.abs(embeds_no_noise_val)),
-
         "embeds/post_fuse_mean/val": torch.mean(embeds_post_fuse_val),
+        "embeds/pre_fuse_mean/tr": torch.mean(embeds_pre_fuse_tr),
         "embeds/pre_fuse_mean/val": torch.mean(embeds_pre_fuse_val),
-        "embeds/post_fuse_std/val": torch.std(embeds_post_fuse_val),
-        "embeds/pre_fuse_std/val": torch.std(embeds_pre_fuse_val),
-        "embeds/post_fuse_mean_of_std/val": torch.mean(torch.std(embeds_post_fuse_val, dim=1)),
-        "embeds/pre_fuse_mean_of_std/val": torch.mean(torch.std(embeds_pre_fuse_val, dim=1)),
+        "embeds/no_noise_mean/tr": torch.mean(embeds_no_noise_tr),
+        "embeds/no_noise_mean/val": torch.mean(embeds_no_noise_val),
+
+        "embeds/post_fuse_feat_std/tr": torch.mean(torch.std(embeds_post_fuse_tr, dim=0)),
+        "embeds/post_fuse_feat_std/val": torch.mean(torch.std(embeds_post_fuse_val, dim=0)),
+        "embeds/pre_fuse_feat_std/tr": torch.mean(torch.std(embeds_pre_fuse_tr, dim=0)),
+        "embeds/pre_fuse_feat_std/val": torch.mean(torch.std(embeds_pre_fuse_val, dim=0)),
+        "embeds/no_noise_feat_std/tr": torch.mean(torch.std(embeds_no_noise_tr, dim=0)),
+        "embeds/no_noise_feat_std/val": torch.mean(torch.std(embeds_no_noise_val, dim=0)),
+
+        "embeds/post_fuse_ex_std/tr": torch.mean(torch.std(embeds_post_fuse_tr, dim=1)),
+        "embeds/post_fuse_ex_std/val": torch.mean(torch.std(embeds_post_fuse_val, dim=1)),
+        "embeds/pre_fuse_ex_std/tr": torch.mean(torch.std(embeds_pre_fuse_tr, dim=1)),
+        "embeds/pre_fuse_ex_std/val": torch.mean(torch.std(embeds_pre_fuse_val, dim=1)),
+        "embeds/no_noise_ex_std/tr": torch.mean(torch.std(embeds_no_noise_tr, dim=1)),
+        "embeds/no_noise_ex_std/val": torch.mean(torch.std(embeds_no_noise_val, dim=1)),
+
+        "embeds/post_fuse_abs/tr": torch.mean(torch.abs(embeds_post_fuse_tr)),
         "embeds/post_fuse_abs/val": torch.mean(torch.abs(embeds_post_fuse_val)),
+        "embeds/pre_fuse_abs/tr": torch.mean(torch.abs(embeds_pre_fuse_tr)),
         "embeds/pre_fuse_abs/val": torch.mean(torch.abs(embeds_pre_fuse_val)),
+        "embeds/no_noise_abs/tr": torch.mean(torch.abs(embeds_no_noise_tr)),
+        "embeds/no_noise_abs/val": torch.mean(torch.abs(embeds_no_noise_val)),
     }
     
     # Generate images
-    image_save_folder = f"{imle_model_folder(args, make_folder=True)}/images"
-    Utils.conditional_make_folder(image_save_folder)
     images_tr = ImageLatentDataset.generate_images(nxz_data_tr, model, args)
-    images_tr.save(f"{image_save_folder}/{cur_step}_tr.png")
     images_val = ImageLatentDataset.generate_images(nxz_data_val, model, args)
-    images_val.save(f"{image_save_folder}/{cur_step}_val.png")
+    if args.save_iter > 0:
+        image_save_folder = f"{imle_model_folder(args, make_folder=True)}/images"
+        Utils.conditional_make_folder(image_save_folder)
+        images_tr.save(f"{image_save_folder}/{cur_step}_tr.png")
+        images_val.save(f"{image_save_folder}/{cur_step}_val.png")
 
     # Evaluate on the proxy task            
     loss_tr_min = ImageLatentDataset.eval_model(nxz_data_tr, model, args, use_sampled_codes=True)
@@ -144,8 +146,8 @@ def evaluate(model, data_tr, data_val, scheduler, args, cur_step, nxz_data_tr=No
         "loss/mean/val": loss_val_mean,
         "lr": scheduler.get_lr(),
         "train_step": cur_step,
-        "images/val": wandb.Image(f"{image_save_folder}/{cur_step}_val.png"),
-        "images/tr": wandb.Image(f"{image_save_folder}/{cur_step}_tr.png"),
+        "images/val": wandb.Image(images_val),
+        "images/tr": wandb.Image(images_tr),
         "epoch": cur_step // (len(loader_tr) * args.ipe)
     }, step=cur_step)
 
@@ -189,7 +191,7 @@ class ImageLatentDataset(Dataset):
         with torch.no_grad():
             embeddings, targets = [], []
             for (x,y),(xn,z,_) in tqdm(loader,
-                desc="Generating embeddings for ImageLatentDataset [mode={mode}]",
+                desc=f"Generating embeddings for ImageLatentDataset [mode={mode}]",
                 total=len(loader),
                 leave=False,
                 dynamic_ncols=True):
@@ -391,7 +393,7 @@ if __name__ == "__main__":
         Utils.set_seed(states["seeds"])
         args = argparse.Namespace(**vars(states["args"]) | vars(args))
         model = Models.get_model(args, imle=True)
-        model.load_state_dict(states["model"])
+        model.load_state_dict(states["model"], strict=False)
         model = nn.DataParallel(model, device_ids=args.gpus).to(device)
         optimizer = torch.optim.Adam(model.parameters(), lr=1,
             weight_decay=1e-5)
@@ -455,8 +457,9 @@ if __name__ == "__main__":
         # Otherwise the worker threads hang around and cause problems?
         del loader, chain_loader
         
-        _ = evaluate(model, data_tr, data_val, scheduler, args, cur_step,
-            nxz_data_tr=epoch_dataset)
+        if epoch % args.eval_iter == 0 or epoch == args.eval_iter - 1:
+            _ = evaluate(model, data_tr, data_val, scheduler, args, cur_step,
+                nxz_data_tr=epoch_dataset)
         
         if ((not args.save_iter == 0 and epoch % args.save_iter == 0)
             or epoch in args.save_epochs):

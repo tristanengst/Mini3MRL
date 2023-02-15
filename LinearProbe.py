@@ -110,6 +110,7 @@ def linear_probe(model, loader_tr, loader_val, args, **kwargs):
     
     epoch2accs_tr, epoch2accs_val = {}, {}
     losses_tr, losses_val = [], []
+    grad_norms = []
     for e in tqdm(range(args.probe_epochs),
         desc="Probe Epochs",
         leave=False,
@@ -118,11 +119,13 @@ def linear_probe(model, loader_tr, loader_val, args, **kwargs):
         for x,y in loader_tr:
             x = x.to(device, non_blocking=True)
             y = y.to(device, non_blocking=True)
+            optimizer.zero_grad(set_to_none=True)
             loss = loss_fn(model(x), y)
             loss.backward()
             optimizer.step()
-            optimizer.zero_grad(set_to_none=True)
 
+            grad_norms.append(torch.linalg.norm(model.probe.weight.grad).item())
+            
         scheduler.step()
 
         if e % args.probe_eval_iter == 0 or e == args.probe_epochs - 1:
@@ -153,6 +156,8 @@ def linear_probe(model, loader_tr, loader_val, args, **kwargs):
     losses_tr = torch.tensor(losses_tr)
     losses_val = torch.tensor(losses_val)
 
+    grad_norms = torch.tensor(grad_norms)
+
     return {"acc/linear_probe_max/tr": torch.max(accs_tr),
         "acc/linear_probe_start/tr": accs_tr[0],
         "acc/linear_probe_end/tr": accs_tr[-1],
@@ -162,6 +167,9 @@ def linear_probe(model, loader_tr, loader_val, args, **kwargs):
         "acc/linear_probe_end/val": accs_val[-1],
         "loss/linear_probe_std/tr": torch.std(losses_tr),
         "loss/linear_probe_std/val": torch.std(losses_val),
+        "probe_grads/linear_mean": torch.mean(grad_norms),
+        "probe_grads/linear_std": torch.std(grad_norms),
+        "probe_grads/linear_max": torch.max(grad_norms),
         "acc/linear_probe_max_delta_from_prior_max/val": delta_from_max_val}
 
 def mlp_probe(model, loader_tr, loader_val, args, **kwargs):
