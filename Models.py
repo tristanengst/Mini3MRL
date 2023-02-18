@@ -178,8 +178,6 @@ class AdaIN(nn.Module):
         z_shift = z[:, :self.c]
         z_scale = z[:, self.c:]
 
-        x = self.x_pix_norm(x)
-
         x = torch.repeat_interleave(x, z.shape[0] // x.shape[0], dim=0)
         result = z_shift + x * (1 + z_scale)
         return result
