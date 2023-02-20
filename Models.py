@@ -103,6 +103,23 @@ class IMLE_DAE_MLP(nn.Module):
         return EncoderWithAdaIn(self.encoder, self.ada_in,
             use_mean_representation=use_mean_representation)
 
+def get_codes(bs, code_dim, device="cpu", seed=None):
+    """Returns [bs] latent codes to be passed into the model.
+
+    Args:
+    bs          -- number of latent codes to return
+    code_dim    -- dimension of input latent codes
+    device      -- device to return latent codes on
+    seed        -- None for no seed (outputs will be different on different
+                    calls), or a number for a fixed seed
+    """
+    if seed is None:
+        return torch.randn(bs, code_dim, device=device)
+    else:
+        z = torch.zeros(bs, code_dim, device=device)
+        z.normal_(generator=torch.Generator(device).manual_seed(seed))
+        return z
+
 class EncoderWithAdaIn(nn.Module):
 
     def __init__(self, encoder, ada_in, use_mean_representation=False):
@@ -150,7 +167,7 @@ class EncoderWithAdaIn(nn.Module):
 
 class AdaIN(nn.Module):
 
-    def __init__(self, c, epsilon=1e-8, act_type="leakyrelu", normalize_z=True):
+    def __init__(self, c, epsilon=0, act_type="leakyrelu", normalize_z=True):
         super(AdaIN, self).__init__()
         self.register_buffer("epsilon", torch.tensor(epsilon))
         self.c = c
@@ -163,10 +180,29 @@ class AdaIN(nn.Module):
             layers=8,
             out_dim=self.c * 2,
             equalized_lr=True,
+            end_with_act=False,
             act_type=act_type)))
 
         self.model = nn.Sequential(OrderedDict(layers))
-        self.x_pix_norm = PixelNormLayer()
+
+        self.x_modification_layer = nn.Linear(self.c, self.c)
+
+        self.register_buffer("z_scale_mean", torch.zeros(self.c))
+        self.register_buffer("z_shift_mean", torch.zeros(self.c))
+        self.init_constants()
+
+    def get_z_stats(self, num_z=2048, device="cpu"):
+        """Returns the mean shift and scale used in the AdaIN, with the mean
+        taken over [num_z] different latent codes.
+        """
+        with torch.no_grad():
+            z = self.model(get_codes(num_z, 512, device=device))
+            z_shift, z_scale = z[:, :self.c], z[:, self.c:]
+            return torch.mean(z_shift, dim=0), torch.mean(z_scale, dim=0)
+
+    def init_constants(self, num_z=2048):
+        """Sets the [z_shift_mean] and [z_shift_scale] constants."""
+        self.z_shift_mean, self.z_scale_mean = self.get_z_stats(num_z=num_z)
 
     def forward(self, x, z):
         """
@@ -175,8 +211,11 @@ class AdaIN(nn.Module):
         z   -- (N*k)xCODE_DIM latent codes
         """
         z = self.model(z)
-        z_shift = z[:, :self.c]
-        z_scale = z[:, self.c:]
+        z_shift = z[:, :self.c] - self.z_shift_mean
+        z_scale = z[:, self.c:] - self.z_scale_mean
+
+        z_scale = torch.nn.functional.relu(z_scale)
+        x = self.x_modification_layer(x)
 
         x = torch.repeat_interleave(x, z.shape[0] // x.shape[0], dim=0)
         result = z_shift + x * (1 + z_scale)

@@ -145,7 +145,7 @@ def linear_probe(model, loader_tr, loader_val, args, **kwargs):
 
     if args.probe_verbosity > 0:
         eval_str = f"\tLinear probe epoch to accuracy (train/val): "
-        eval_str += " ".join([f"{e:4}=({tr:.2f}/{val:.2f})" for (e,tr),(_,val) in zip(epoch2accs_tr.items(), epoch2accs_val.items())])
+        eval_str += " ".join([f"{e}=({tr:.3f}/{val:.3f})" for (e,tr),(_,val) in zip(epoch2accs_tr.items(), epoch2accs_val.items())])
         tqdm.write(eval_str)
 
     # This measures if the probe broke. We log the delta between the accuracy at
@@ -218,7 +218,7 @@ def mlp_probe(model, loader_tr, loader_val, args, **kwargs):
 
     if args.probe_verbosity > 0:
         eval_str = f"\tMLP probe epoch to accuracy (train/val): "
-        eval_str += " ".join([f"{e:4}=({tr:.2f}/{val:.2f})" for (e,tr),(_,val) in zip(epoch2accs_tr.items(), epoch2accs_val.items())])
+        eval_str += " ".join([f"{e}=({tr:.3f}/{val:.3f})" for (e,tr),(_,val) in zip(epoch2accs_tr.items(), epoch2accs_val.items())])
         tqdm.write(eval_str)
 
     # This measures if the probe broke. We log the delta between the accuracy at
@@ -243,8 +243,8 @@ def mlp_probe(model, loader_tr, loader_val, args, **kwargs):
         "acc/mlp_probe_max/val": torch.max(accs_val),
         "acc/mlp_probe_start/val": accs_val[0],
         "acc/mlp_probe_end/val": accs_val[-1],
-        "loss/linear_probe_std/tr": torch.std(losses_tr),
-        "loss/linear_probe_std/val": torch.std(losses_val),
+        "loss/mlp_probe_std/tr": torch.std(losses_tr),
+        "loss/mlp_probe_std/val": torch.std(losses_val),
         "acc/mlp_probe_max_delta_from_prior_max/val": delta_from_max_val}
 
 

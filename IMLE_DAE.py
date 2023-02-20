@@ -104,6 +104,12 @@ def evaluate(model, data_tr, data_val, scheduler, args, cur_step, nxz_data_tr=No
         "embeds/no_noise_abs/tr": torch.mean(torch.abs(embeds_no_noise_tr)),
         "embeds/no_noise_abs/val": torch.mean(torch.abs(embeds_no_noise_val)),
     }
+
+    z_shift_ex_mean, z_scale_ex_mean = model.module.ada_in.get_z_stats(device=device)
+    z_results = {
+        "z_shift_ex_mean": z_shift_ex_mean,
+        "z_scale_ex_mean": z_scale_ex_mean
+    }
     
     # Generate images
     images_tr = ImageLatentDataset.generate_images(nxz_data_tr, model, args)
@@ -130,16 +136,18 @@ def evaluate(model, data_tr, data_val, scheduler, args, cur_step, nxz_data_tr=No
         num_workers=args.num_workers,
         pin_memory=True)
 
-    tqdm.write(f"Step {cur_step}/{len(loader_tr) * args.ipe * args.epochs} - lr={scheduler.get_lr():.5e} loss/min/tr={loss_tr_min:.5f} loss/min/val={loss_val_min:.5f} loss/mean/tr={loss_tr_mean:.5f} loss/mean/val={loss_val_mean:.5f}")
+    epoch = (cur_step // (len(loader_tr) * args.ipe)) - 1
+
+    tqdm.write(f"Epoch {epoch}/{args.epochs} - Step {cur_step}/{len(loader_tr) * args.ipe * args.epochs} - lr={scheduler.get_lr():.5e} loss/min/tr={loss_tr_min:.5f} loss/min/val={loss_val_min:.5f} loss/mean/tr={loss_tr_mean:.5f} loss/mean/val={loss_val_mean:.5f}")
 
     # Evaluate on the probing task
-    if (cur_step // (len(loader_tr) * args.ipe)) % args.probe_iter == 0:
+    if epoch % args.probe_iter == 0 or epoch == -1 or epoch == args.epochs - 1:
         probe_results = LinearProbe.probe(model, loader_tr, loader_val, args)
     else:
-        tqdm.write(f"Computed epoch as {cur_step // (len(loader_tr) * args.ipe)}; not probing")
+        tqdm.write(f"Computed epoch as {epoch}; not probing")
         probe_results = {}
 
-    wandb.log(probe_results | embedding_results | {
+    wandb.log(probe_results | embedding_results | z_results | {
         "loss/min/tr": loss_tr_min,
         "loss/min/val": loss_val_min,
         "loss/mean/tr": loss_tr_mean,
@@ -148,7 +156,7 @@ def evaluate(model, data_tr, data_val, scheduler, args, cur_step, nxz_data_tr=No
         "train_step": cur_step,
         "images/val": wandb.Image(images_val),
         "images/tr": wandb.Image(images_tr),
-        "epoch": cur_step // (len(loader_tr) * args.ipe)
+        "epoch": epoch,
     }, step=cur_step)
 
 class ImageLatentDataset(Dataset):
@@ -394,13 +402,15 @@ if __name__ == "__main__":
         model = nn.DataParallel(model, device_ids=args.gpus).to(device)
         optimizer = torch.optim.Adam(model.parameters(), lr=1,
             weight_decay=1e-5)
-        optimizer.load_state_dict(states["optimizer"])
+        # optimizer.load_state_dict(states["optimizer"])
         model = model.to(device)
         last_epoch = states["epoch"]
 
     wandb.init(anonymous="allow", id=args.uid, config=args,
         mode=args.wandb, project="Mini3MRL", entity="apex-lab",
         name=os.path.basename(imle_model_folder(args)))
+
+    tqdm.write(f"MODEL\n{model.module}")
     
     scheduler = Utils.StepScheduler(optimizer, args.lrs)
     loss_fn = nn.BCELoss()
@@ -452,9 +462,10 @@ if __name__ == "__main__":
             cur_step += 1
 
         # Otherwise the worker threads hang around and cause problems?
-        del loader, chain_loader
+        del loader
+        del chain_loader
         
-        if epoch % args.eval_iter == 0 or epoch == args.eval_iter - 1:
+        if epoch % args.eval_iter == 0 or epoch == args.epochs - 1:
             _ = evaluate(model, data_tr, data_val, scheduler, args, cur_step,
                 nxz_data_tr=epoch_dataset)
         

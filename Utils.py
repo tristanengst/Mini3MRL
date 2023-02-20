@@ -124,7 +124,9 @@ def images_to_pil_image(images):
     fig.savefig(buf, dpi=256)
     buf.seek(0)
     plt.close("all")
-    return Image.open(buf)
+    result = Image.open(buf)
+    del buf
+    return result
 
 def embeddings_to_pil_image(embeddings, classes, method="plain"):
     """Returns a PIL image of [embeddings] and [classes] represented in feature
