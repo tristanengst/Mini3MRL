@@ -6,8 +6,8 @@ A lot of what's here is taken from [this repo](https://github.com/ReyhaneAskari/
 ## Setup
 In a conda environment:
 ```
-conda install pytorch torchvision pytorch-cuda=11.7 -c pytorch -c nvidia
-conda install -c conda-forge wandb tqdm scikit-learn matplotlib plotly pandas
+conda install -y pytorch torchvision pytorch-cuda=11.7 -c pytorch -c nvidia
+conda install -y -c conda-forge wandb tqdm scikit-learn matplotlib plotly pandas
 pip install kaleido
 ```
 

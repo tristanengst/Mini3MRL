@@ -66,12 +66,14 @@ class DAE_MLP(nn.Module):
 
 class IMLE_DAE_MLP(nn.Module):
 
-    def __init__(self, args):
+    def __init__(self, args, ignore_latents=False, latent_dim=512, **kwargs):
         super(IMLE_DAE_MLP, self).__init__()
-        self.code_dim = 512
+        self.args = args
+        self.latent_dim = latent_dim
+        self.ignore_latents = ignore_latents
         self.encoder = MLPEncoder(**vars(args))
         self.decoder = MLPDecoder(**vars(args))
-        self.ada_in = AdaIN(self.encoder.feat_dim)
+        self.ada_in = IgnoreLatentAdaIN(**vars(args)) if ignore_latents else AdaIN(**vars(args))
 
     def get_codes(self, bs, device="cpu", seed=None):
         """Returns [bs] latent codes to be passed into the model.
@@ -83,9 +85,9 @@ class IMLE_DAE_MLP(nn.Module):
                     calls), or a number for a fixed seed
         """
         if seed is None:
-            return torch.randn(bs, self.code_dim, device=device)
+            return torch.randn(bs, self.latent_dim, device=device)
         else:
-            z = torch.zeros(bs, self.code_dim, device=device)
+            z = torch.zeros(bs, self.latent_dim, device=device)
             z.normal_(generator=torch.Generator(device).manual_seed(seed))
             return z
     
@@ -102,6 +104,14 @@ class IMLE_DAE_MLP(nn.Module):
     def to_encoder_with_ada_in(self, use_mean_representation=False):
         return EncoderWithAdaIn(self.encoder, self.ada_in,
             use_mean_representation=use_mean_representation)
+
+    def to_ignore_latent_imle_dae_mlp(self):
+        ignore_latent_imle_dae_mlp = IMLE_DAE_MLP(self.args,
+            ignore_latents=True,
+            latent_dim=self.latent_dim)
+        ignore_latent_imle_dae_mlp.load_state_dict(self.state_dict(), strict=False)
+        return ignore_latent_imle_dae_mlp
+        
 
 def get_codes(bs, code_dim, device="cpu", seed=None):
     """Returns [bs] latent codes to be passed into the model.
@@ -126,7 +136,7 @@ class EncoderWithAdaIn(nn.Module):
         super(EncoderWithAdaIn, self).__init__()
         self.encoder = encoder
         self.ada_in = ada_in
-        self.code_dim = 512
+        self.latent_dim = 512
         self.use_mean_representation = use_mean_representation
 
     def get_codes(self, bs, device="cpu", seed=None):
@@ -139,9 +149,9 @@ class EncoderWithAdaIn(nn.Module):
                     calls), or a number for a fixed seed
         """
         if seed is None:
-            return torch.randn(bs, self.code_dim, device=device)
+            return torch.randn(bs, self.latent_dim, device=device)
         else:
-            z = torch.zeros(bs, self.code_dim, device=device)
+            z = torch.zeros(bs, self.latent_dim, device=device)
             z.normal_(generator=torch.Generator(device).manual_seed(seed))
             return z
 
@@ -167,28 +177,31 @@ class EncoderWithAdaIn(nn.Module):
 
 class AdaIN(nn.Module):
 
-    def __init__(self, c, epsilon=0, act_type="leakyrelu", normalize_z=True):
+    def __init__(self, feat_dim=64, normalize_z=True, mapping_net_layers=8, mapping_net_h_dim=512, latent_dim=512, **kwargs):
         super(AdaIN, self).__init__()
-        self.register_buffer("epsilon", torch.tensor(epsilon))
-        self.c = c
+        self.feat_dim = feat_dim
+        self.normalize_z = normalize_z
+        self.mapping_net_h_dim = mapping_net_h_dim
+        self.mapping_net_layers = mapping_net_layers
+        self.latent_dim = latent_dim
 
         layers = []
         if normalize_z:
-            layers.append(("normalize_z", PixelNormLayer(epsilon=epsilon)))
-        layers.append(("mapping_net", MLP(in_dim=512,
-            h_dim=512,
-            layers=8,
-            out_dim=self.c * 2,
+            layers.append(("normalize_z", PixelNormLayer(epsilon=0)))
+        layers.append(("mapping_net", MLP(in_dim=latent_dim,
+            h_dim=mapping_net_h_dim,
+            layers=mapping_net_layers,
+            out_dim=self.feat_dim * 2,
             equalized_lr=True,
             end_with_act=False,
-            act_type=act_type)))
+            act_type="leakyrelu")))
 
         self.model = nn.Sequential(OrderedDict(layers))
 
-        self.x_modification_layer = nn.Linear(self.c, self.c)
+        self.x_modification_layer = nn.Linear(self.feat_dim, self.feat_dim)
 
-        self.register_buffer("z_scale_mean", torch.zeros(self.c))
-        self.register_buffer("z_shift_mean", torch.zeros(self.c))
+        self.register_buffer("z_scale_mean", torch.zeros(self.feat_dim))
+        self.register_buffer("z_shift_mean", torch.zeros(self.feat_dim))
         self.init_constants()
 
     def get_z_stats(self, num_z=2048, device="cpu"):
@@ -197,7 +210,7 @@ class AdaIN(nn.Module):
         """
         with torch.no_grad():
             z = self.model(get_codes(num_z, 512, device=device))
-            z_shift, z_scale = z[:, :self.c], z[:, self.c:]
+            z_shift, z_scale = z[:, :self.feat_dim], z[:, self.feat_dim:]
             return torch.mean(z_shift, dim=0), torch.mean(z_scale, dim=0)
 
     def init_constants(self, num_z=2048):
@@ -211,8 +224,8 @@ class AdaIN(nn.Module):
         z   -- (N*k)xCODE_DIM latent codes
         """
         z = self.model(z)
-        z_shift = z[:, :self.c] - self.z_shift_mean
-        z_scale = z[:, self.c:] - self.z_scale_mean
+        z_shift = z[:, :self.feat_dim] - self.z_shift_mean
+        z_scale = z[:, self.feat_dim:] - self.z_scale_mean
 
         z_scale = torch.nn.functional.relu(z_scale)
         x = self.x_modification_layer(x)
@@ -220,6 +233,22 @@ class AdaIN(nn.Module):
         x = torch.repeat_interleave(x, z.shape[0] // x.shape[0], dim=0)
         result = z_shift + x * (1 + z_scale)
         return result
+
+    def to_ignore_latent_ada_in(self):
+        ada_in = IgnoreLatentAdaIN(feat_dim=self.feat_dim,
+            normalize_z=self.normalize_z,
+            mapping_net_h_dim=self.mapping_net_h_dim,
+            mapping_net_layers=self.mapping_net_layers,
+            latent_dim=self.latent_dim)
+        ada_in.load_state_dict(self.state_dict(), strict=False)
+        return ada_in
+
+class IgnoreLatentAdaIN(AdaIN):
+    def __init__(self, *args, **kwargs): super(IgnoreLatentAdaIN, self).__init__(*args, **kwargs)
+
+    def forward(self, x, z):
+        x = self.x_modification_layer(x)
+        return torch.repeat_interleave(x, z.shape[0] // x.shape[0], dim=0)
 
 def get_act(act_type):
     """Returns an activation function of type [act_type]."""
