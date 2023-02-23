@@ -105,10 +105,12 @@ def evaluate(model, data_tr, data_val, scheduler, args, cur_step, nxz_data_tr=No
         "embeds/no_noise_abs/val": torch.mean(torch.abs(embeds_no_noise_val)),
     }
 
-    z_shift_ex_mean, z_scale_ex_mean = model.module.ada_in.get_z_stats(device=device)
+    z_shift_ex_mean, z_shift_ex_std, z_scale_ex_mean,  z_scale_ex_std = model.module.ada_in.get_z_stats(device=device)
     z_results = {
         "z_shift_ex_mean": z_shift_ex_mean,
-        "z_scale_ex_mean": z_scale_ex_mean
+        "z_shift_ex_std": z_shift_ex_std,
+        "z_scale_ex_mean": z_scale_ex_mean,
+        "z_scale_ex_std": z_scale_ex_std,
     }
     
     # Generate images

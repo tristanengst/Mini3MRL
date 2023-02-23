@@ -211,11 +211,11 @@ class AdaIN(nn.Module):
         with torch.no_grad():
             z = self.model(get_codes(num_z, 512, device=device))
             z_shift, z_scale = z[:, :self.feat_dim], z[:, self.feat_dim:]
-            return torch.mean(z_shift, dim=0), torch.mean(z_scale, dim=0)
+            return torch.mean(z_shift, dim=0), torch.std(z_shift, dim=0), torch.mean(z_scale, dim=0), torch.std(z_scale, dim=0)
 
     def init_constants(self, num_z=2048):
         """Sets the [z_shift_mean] and [z_shift_scale] constants."""
-        self.z_shift_mean, self.z_scale_mean = self.get_z_stats(num_z=num_z)
+        self.z_shift_mean, _, self.z_scale_mean, _ = self.get_z_stats(num_z=num_z)
 
     def forward(self, x, z):
         """
