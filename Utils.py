@@ -12,11 +12,36 @@ import io
 
 from tqdm import tqdm
 
+import torch.multiprocessing
+torch.multiprocessing.set_sharing_strategy("file_descriptor")
+
 def conditional_make_folder(f):
     try:
         os.makedirs(f)
     except:
         pass
+
+def matrix_to_stats(m, matrix_name=""):
+    """Returns a dictionary of statistics for matrix [m] for logging to WandB."""
+    matrix_name = f"{matrix_name}_" if len(matrix_name) > 0 else matrix_name
+    m = m.squeeze()
+    if not len(m.shape) == 2:
+        tqdm.write(f"MATRIX_TO_STATS: Matrix had {len(m.shape)} dimensions after squeezing out singular ones. Singular values will not be logged.")
+        two_d_stats = {}
+    else:
+        singular_vals = torch.linalg.svdvals(m)
+        two_d_stats = {
+            f"weights/{matrix_name}singular_vals": singular_vals,
+            f"weights/{matrix_name}singular_vals_std": torch.mean(singular_vals),
+            f"weights/{matrix_name}singular_vals_mean": torch.std(singular_vals),
+        }
+    
+    return two_d_stats | {
+        f"weights/{matrix_name}mean": torch.mean(m),
+        f"weights/{matrix_name}std": torch.std(m),
+        f"weights/{matrix_name}": m,
+        f"weights/{matrix_name}norm": torch.linalg.norm(m) / (m.view(-1).shape[0] ** .5),
+    }
 
 def with_noise(x, std=.8, seed=None):
     if seed is None:
@@ -168,7 +193,7 @@ class StepScheduler:
                     until a new learning rate is specified
     last_epoch  -- the last run step
     """
-    def __init__(self, optimizer, lrs, args=None, last_epoch=-1):
+    def __init__(self, optimizer, lrs, last_epoch=-1):
         super(StepScheduler, self).__init__()
         self.optimizer = optimizer
         
