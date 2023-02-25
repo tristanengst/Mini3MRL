@@ -64,18 +64,13 @@ class ProbeWithBackbone(nn.Module):
     def __init__(self, encoder, probe_normalize_feats=False, num_classes=10, **kwargs):
         super(ProbeWithBackbone, self).__init__()
         self.encoder = encoder
-        # self.probe = nn.Linear(encoder.feat_dim, num_classes)
-        self.probe = self.probe = nn.Linear(64, num_classes)
+        self.probe = nn.Linear(encoder.feat_dim, num_classes)
         self.probe_normalize_feats = probe_normalize_feats
 
     def forward(self, x):
         with torch.no_grad():
             fx = self.encoder(x)
-
-            if self.probe_normalize_feats:
-                fx_mean = torch.mean(fx, dim=0)
-                fx_std = torch.std(fx, dim=0)
-                fx = (fx - fx_mean) / (fx_std + 1e-8)
+            fx = nn.functional.normalize(fx) if self.probe_normalize_feats else fx
 
         return self.probe(fx)
 
@@ -89,8 +84,7 @@ class MLPProbeWithBackbone(ProbeWithBackbone):
     """
     def __init__(self, encoder, num_classes=10, **kwargs):
         super(MLPProbeWithBackbone, self).__init__(encoder, **kwargs)
-        # self.probe = torchvision.ops.MLP(encoder.feat_dim, [512, 512, num_classes])
-        self.probe = torchvision.ops.MLP(64, [512, 512, num_classes])
+        self.probe = torchvision.ops.MLP(encoder.feat_dim, [512, 512, num_classes])
         
 def evaluate_probe(model, loader, args, noise=False):
     """Returns the loss and accuracy of [model] on data from [loader]."""
@@ -329,6 +323,8 @@ if __name__ == "__main__":
         num_workers=args.num_workers,
         pin_memory=True)
 
+    tqdm.write(f"USING MODEL {args.resume}")
+
     if args.probe_linear:
         if args.probe_include_codes in [1, 2]:
             raise NotImplementedError()
@@ -341,8 +337,8 @@ if __name__ == "__main__":
                 desc="Trials"):
 
                 result = linear_probe(model.module, loader_tr, loader_val, args, include_codes=True)
-                probe_acc_max_val.append(result["acc/linear_probe_end/val"])
-                probe_acc_end_val.append(result["acc/linear_probe_max/val"])
+                probe_acc_max_val.append(result["acc/linear_probe_max/val"])
+                probe_acc_end_val.append(result["acc/linear_probe_end/val"])
 
             probe_acc_end_val = torch.tensor(probe_acc_end_val)
             probe_acc_max_val = torch.tensor(probe_acc_max_val)
@@ -360,8 +356,8 @@ if __name__ == "__main__":
                 desc="Trials"):
 
                 result = mlp_probe(model.module, loader_tr, loader_val, args, include_codes=True)
-                probe_acc_max_val.append(result["acc/mlp_probe_end/val"])
-                probe_acc_end_val.append(result["acc/mlp_probe_max/val"])
+                probe_acc_max_val.append(result["acc/mlp_probe_max/val"])
+                probe_acc_end_val.append(result["acc/mlp_probe_end/val"])
 
             probe_acc_end_val = torch.tensor(probe_acc_end_val)
             probe_acc_max_val = torch.tensor(probe_acc_max_val)
