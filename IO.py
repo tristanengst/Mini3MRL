@@ -87,14 +87,14 @@ def parser_with_training_args(P):
 def parser_with_probe_args(P):
     P.add_argument("--probe_lrs", default=[0, 1e-3], type=float, nargs="*",
         help="Learning rates. Even indices give step indices, odd indices give the learning rate to start at the step given at the prior index.")
-    P.add_argument("--probe_epochs",type=int, default=100,
+    P.add_argument("--probe_epochs",type=int, default=10,
         help="Number of epochs for the probe")
     P.add_argument("--probe_linear", choices=[0, 1], default=0, type=int,
         help="Whether to include a linear probe")
     P.add_argument("--probe_mlp", choices=[0, 1], default=0, type=int,
         help="Whether the probe should include an MLP")
     P.add_argument("--probe_include_codes", choices=[0, 1, 2], default=0, type=int,
-        help="Whether the probe should include noise. 2 does it both ways")
+        help="Whether the probe should include latents. 2 does it both ways")
     P.add_argument("--probe_verbosity", choices=[0, 1], default=1, type=int,
         help="Probe verbosity.")
     P.add_argument("--probe_normalize_feats", choices=[0, 1], default=0, type=int,
@@ -112,4 +112,6 @@ def parser_with_imle_args(P):
         help="Number of gradient steps per code.")
     P.add_argument("--latent_arch", choices=["v0", "v1", "v2"], default="v0",
         help="Architecture for noise injection")
+    P.add_argument("--adain_x_norm", default="none", choices=["none", "norm"],
+        help="Kind of normalization in AdaIN")
     return P

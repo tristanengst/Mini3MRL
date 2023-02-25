@@ -177,13 +177,14 @@ class EncoderWithAdaIn(nn.Module):
 
 class AdaIN(nn.Module):
 
-    def __init__(self, feat_dim=64, normalize_z=True, mapping_net_layers=8, mapping_net_h_dim=512, latent_dim=512, **kwargs):
+    def __init__(self, feat_dim=64, adain_x_norm=None, normalize_z=True, mapping_net_layers=8, mapping_net_h_dim=512, latent_dim=512, **kwargs):
         super(AdaIN, self).__init__()
         self.feat_dim = feat_dim
         self.normalize_z = normalize_z
         self.mapping_net_h_dim = mapping_net_h_dim
         self.mapping_net_layers = mapping_net_layers
         self.latent_dim = latent_dim
+        self.adain_x_norm = adain_x_norm
 
         layers = []
         if normalize_z:
@@ -199,6 +200,13 @@ class AdaIN(nn.Module):
         self.model = nn.Sequential(OrderedDict(layers))
 
         self.x_modification_layer = nn.Linear(self.feat_dim, self.feat_dim)
+
+        if adain_x_norm == "none":
+            self.x_norm_layer = nn.Identity()
+        elif adain_x_norm == "norm":
+            self.x_norm_layer = NormLayer()
+        else:
+            raise NotImplementedError()
 
         self.register_buffer("z_scale_mean", torch.zeros(self.feat_dim))
         self.register_buffer("z_shift_mean", torch.zeros(self.feat_dim))
@@ -229,6 +237,7 @@ class AdaIN(nn.Module):
 
         z_scale = torch.nn.functional.relu(z_scale)
         x = self.x_modification_layer(x)
+        x = self.x_norm_layer(x)
 
         x = torch.repeat_interleave(x, z.shape[0] // x.shape[0], dim=0)
         result = z_shift + x * (1 + z_scale)
@@ -239,7 +248,8 @@ class AdaIN(nn.Module):
             normalize_z=self.normalize_z,
             mapping_net_h_dim=self.mapping_net_h_dim,
             mapping_net_layers=self.mapping_net_layers,
-            latent_dim=self.latent_dim)
+            latent_dim=self.latent_dim,
+            adain_x_norm=self.adain_x_norm)
         ada_in.load_state_dict(self.state_dict(), strict=False)
         return ada_in
 
@@ -248,6 +258,7 @@ class IgnoreLatentAdaIN(AdaIN):
 
     def forward(self, x, z):
         x = self.x_modification_layer(x)
+        x = self.adain_x_norm(x)
         return torch.repeat_interleave(x, z.shape[0] // x.shape[0], dim=0)
 
 def get_act(act_type):
@@ -266,6 +277,13 @@ def get_lin_layer(in_dim, out_dim, equalized_lr=True, bias=True, **kwargs):
         return EqualizedLinear(in_dim, out_dim, bias=bias, **kwargs)
     else:
         return nn.Linear(in_dim, out_dim, bias=bias)
+
+class NormLayer(nn.Module):
+    """Neural network layer that normalizes its input to have unit norm.
+    Normalization occurs over the flattened dimensions of each sample.
+    """
+    def __init__(self): super(NormLayer, self).__init__()
+    def forward(self, x): return nn.functional.normalize(x.view(x.shape[0], -1), dim=1).view(*x.shape)
 
 
 class PixelNormLayer(nn.Module):
