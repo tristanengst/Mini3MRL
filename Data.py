@@ -17,9 +17,15 @@ def get_data_from_args(args):
         """
         train = (not split == "test")
         if s == "cifar10":
-            return CIFAR10(root="cifar10", train=train, download=True, transform=transform)
+            return ImageFolderSubset(
+                CIFAR10(root="cifar10", train=train, download=True, transform=transforms.ToTensor()),
+                replace_transform=transform,
+                in_memory=True)
         elif s == "mnist":
-            return MNIST(root="mnist", train=train, download=True, transform=transform)
+            return ImageFolderSubset(
+                MNIST(root="mnist", train=train, download=True, transform=transforms.ToTensor()),
+                replace_transform=transform,
+                in_memory=True)
         else:
             return ImageFolder(s, transform=transform)
 
@@ -57,7 +63,6 @@ def min_max_normalization(tensor, min_value, max_value):
 def get_transforms_tr(args):
     if args.data_tr == "mnist":
         return transforms.Compose([
-            transforms.ToTensor(),
             transforms.Lambda(lambda x: min_max_normalization(x, 0, 1)),
             transforms.Lambda(lambda x: torch.round(x))
         ])
@@ -67,7 +72,6 @@ def get_transforms_tr(args):
 def get_transforms_te(args):
     if args.data_tr == "mnist":
         return transforms.Compose([
-            transforms.ToTensor(),
             transforms.Lambda(lambda x: min_max_normalization(x, 0, 1)),
             transforms.Lambda(lambda x: torch.round(x))
         ])
@@ -153,9 +157,14 @@ class ImageFolderSubset(Dataset):
     replace_transform   -- transform to REPLACE and not compose with transforms
                             in [data]. If None, the transform in [data] is
                             preserved
+    in_memory           -- if [data] can fit in memory and ToTensor() is its
+                            transform, use this while specifying
+                            [replace_transform] to be a transform that can intake
+                            tensors
     """
-    def __init__(self, data, indices, replace_transform=None):
+    def __init__(self, data, indices=None, replace_transform=None, target_transform=None, in_memory=False):
         super(ImageFolderSubset, self).__init__()
+        indices = range(len(data)) if indices is None else indices
         self.indices = np.array(list(indices)).astype(np.int64)
         self.data = data
 
@@ -197,9 +206,16 @@ class ImageFolderSubset(Dataset):
        
         self.targets = [y for _,y in self.samples]
 
-        self.transform = data.transform if replace_transform is None else replace_transform
-        self.target_transform = data.target_transform
-        self.loader = data.loader if hasattr(data, "loader") else (lambda x: x)
+        self.in_memory = in_memory
+        if not self.in_memory:
+            self.transform = data.transform if replace_transform is None else replace_transform
+            self.target_transform = data.target_transform
+            self.loader = data.loader if hasattr(data, "loader") else (lambda x: x)
+        else:
+            self.transform = replace_transform
+            self.target_transform = target_transform
+            self.X, self.Y = dataset_to_tensors(data)
+            self.loader = lambda x: x
 
         self.n_way = len(self.class2idx)
         self.n_shot = len(self.samples) // self.n_way # This is an average
@@ -209,8 +225,12 @@ class ImageFolderSubset(Dataset):
     def __len__(self): return len(self.indices)
 
     def __getitem__(self, idx):
-        path, target = self.samples[idx]
-        sample = self.loader(path)
+        if self.in_memory:
+            sample, target = self.X[idx], self.Y[idx]
+        else:
+            path, target = self.samples[idx]
+            sample = self.loader(path)
+        
         if self.transform is not None:
             sample = self.transform(sample)
         if self.target_transform is not None:
@@ -245,11 +265,20 @@ class ZipDataset(Dataset):
     def __len__(self): return len(self.datasets[0])
     def __getitem__(self, idx): return tuple([d[idx] for d in self.datasets])
 
-
-if __name__ == "__main__": pass
-
-
-
-    
+def dataset_to_tensors(dataset, bs=1000, num_workers=12):
+    """Returns an (X, Y) tuple where [X] is the x-values of [dataset] and [Y] its
+    y-values. [dataset] should return PIL images.
+    """
+    loader = torch.utils.data.DataLoader(dataset,
+        batch_size=bs,
+        num_workers=num_workers)
+    X, Y = [], []
+    for x,y in tqdm(loader,
+        desc="Building InMemoryImageFolderSubset",
+        leave=False,
+        dynamic_ncols=True):
+        X.append(x)
+        Y.append(y)
+    return torch.cat(X, dim=0), torch.cat(Y, dim=0)
 
         
