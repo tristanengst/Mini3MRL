@@ -27,7 +27,7 @@ def imle_model_folder(args, make_folder=False):
     suffix = "" if args.suffix is None else f"-{args.suffix}"
     job_id = "" if args.job_id is None else f"-{args.job_id}"
     lrs = "_".join([f"{lr:.2e}" for idx,lr in enumerate(args.lrs) if idx % 2 == 1])
-    folder = f"{args.save_folder}/models_{args.script}/{args.script}-{data_str}-bs{args.bs}-epochs{args.epochs}-ipe{args.ipe}-lr{lrs}-ns{args.ns}-nshot{args.n_way}-nway{args.n_shot}-seed{args.seed}-{args.uid}{job_id}{suffix}"
+    folder = f"{args.save_folder}/models_{args.script}/{args.script}-{data_str}-bs{args.bs}-epochs{args.epochs}-feat_dim{args.feat_dim}-ipe{args.ipe}-leakyrelu{args.leaky_relu}-lr{lrs}-ns{args.ns}-nshot{args.n_way}-nway{args.n_shot}-seed{args.seed}-{args.uid}{job_id}{suffix}"
 
     if make_folder:
         Utils.conditional_make_folder(folder)
@@ -411,7 +411,7 @@ if __name__ == "__main__":
         model = nn.DataParallel(model, device_ids=args.gpus).to(device)
         optimizer = torch.optim.Adam(model.parameters(), lr=1,
             weight_decay=1e-5)
-        # optimizer.load_state_dict(states["optimizer"])
+        optimizer.load_state_dict(states["optimizer"])
         model = model.to(device)
         last_epoch = states["epoch"]
 

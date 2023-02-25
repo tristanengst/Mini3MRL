@@ -1,3 +1,4 @@
+import argparse
 from functools import partial
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.svm import LinearSVC
@@ -5,7 +6,10 @@ from tqdm import tqdm
 import torch
 import torch.nn as nn
 import torchvision
+from torch.utils.data import DataLoader
 
+import IO
+import Data
 import Models
 import Utils
 
@@ -60,7 +64,8 @@ class ProbeWithBackbone(nn.Module):
     def __init__(self, encoder, probe_normalize_feats=False, num_classes=10, **kwargs):
         super(ProbeWithBackbone, self).__init__()
         self.encoder = encoder
-        self.probe = nn.Linear(encoder.feat_dim, num_classes)
+        # self.probe = nn.Linear(encoder.feat_dim, num_classes)
+        self.probe = self.probe = nn.Linear(64, num_classes)
         self.probe_normalize_feats = probe_normalize_feats
 
     def forward(self, x):
@@ -84,7 +89,8 @@ class MLPProbeWithBackbone(ProbeWithBackbone):
     """
     def __init__(self, encoder, num_classes=10, **kwargs):
         super(MLPProbeWithBackbone, self).__init__(encoder, **kwargs)
-        self.probe = torchvision.ops.MLP(encoder.feat_dim, [512, 512, num_classes])
+        # self.probe = torchvision.ops.MLP(encoder.feat_dim, [512, 512, num_classes])
+        self.probe = torchvision.ops.MLP(64, [512, 512, num_classes])
         
 def evaluate_probe(model, loader, args, noise=False):
     """Returns the loss and accuracy of [model] on data from [loader]."""
@@ -292,3 +298,77 @@ def plain_linear_probe(loader_tr, loader_val, args):
             optimizer.zero_grad(set_to_none=True)
 
     return accuracy(probe, loader_val, args, noise=False) 
+
+if __name__ == "__main__":
+    P = argparse.ArgumentParser()
+    P = IO.parser_with_default_args(P)
+    P = IO.parser_with_data_args(P)
+    P = IO.parser_with_logging_args(P)
+    P = IO.parser_with_probe_args(P)
+
+    args = P.parse_args()
+    args.probe_lrs = Utils.StepScheduler.process_lrs(args.probe_lrs)
+
+    states = torch.load(args.resume)
+    Utils.set_seed(states["seeds"])
+    args = argparse.Namespace(**vars(states["args"]) | vars(args))
+    model = Models.get_model(args, imle=True)
+    model.load_state_dict(states["model"], strict=False)
+    model = nn.DataParallel(model, device_ids=args.gpus).to(device)
+    model = model.to(device)
+    last_epoch = states["epoch"]
+
+    data_tr, data_val = Data.get_data_from_args(args)
+    loader_tr = DataLoader(data_tr,
+        batch_size=args.bs,
+        shuffle=True,
+        num_workers=args.num_workers,
+        pin_memory=True)
+    loader_val = DataLoader(data_val,
+        batch_size=args.bs,
+        num_workers=args.num_workers,
+        pin_memory=True)
+
+    if args.probe_linear:
+        if args.probe_include_codes in [1, 2]:
+            raise NotImplementedError()
+        elif args.probe_include_codes in [0, 2]:
+            probe_acc_max_val = []
+            probe_acc_end_val = []
+            for t in tqdm(range(args.probe_trials),
+                leave=True,
+                dynamic_ncols=True,
+                desc="Trials"):
+
+                result = linear_probe(model.module, loader_tr, loader_val, args, include_codes=True)
+                probe_acc_max_val.append(result["acc/linear_probe_end/val"])
+                probe_acc_end_val.append(result["acc/linear_probe_max/val"])
+
+            probe_acc_end_val = torch.tensor(probe_acc_end_val)
+            probe_acc_max_val = torch.tensor(probe_acc_max_val)
+            tqdm.write(f"LINEAR PROBE=[acc_end/val_mean={probe_acc_end_val.mean():.5f} acc_end/val_std={probe_acc_end_val.std():.5f} acc_max/val_mean={probe_acc_max_val.mean():.5f} acc_max/val_std={probe_acc_max_val.std():.5f}]")
+
+    if args.probe_mlp:
+        if args.probe_include_codes in [1, 2]:
+            raise NotImplementedError()
+        elif args.probe_include_codes in [0, 2]:
+            probe_acc_max_val = []
+            probe_acc_end_val = []
+            for t in tqdm(range(args.probe_trials),
+                leave=True,
+                dynamic_ncols=True,
+                desc="Trials"):
+
+                result = mlp_probe(model.module, loader_tr, loader_val, args, include_codes=True)
+                probe_acc_max_val.append(result["acc/mlp_probe_end/val"])
+                probe_acc_end_val.append(result["acc/mlp_probe_max/val"])
+
+            probe_acc_end_val = torch.tensor(probe_acc_end_val)
+            probe_acc_max_val = torch.tensor(probe_acc_max_val)
+            tqdm.write(f"MLP PROBE=[acc_end/val_mean={probe_acc_end_val.mean():.5f} acc_end/val_std={probe_acc_end_val.std():.5f} acc_max/val_mean={probe_acc_max_val.mean():.5f} acc_max/val_std={probe_acc_max_val.std():.5f}]")
+
+
+
+
+
+    

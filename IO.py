@@ -99,6 +99,8 @@ def parser_with_probe_args(P):
         help="Probe verbosity.")
     P.add_argument("--probe_normalize_feats", choices=[0, 1], default=0, type=int,
         help="Probe verbosity.")
+    P.add_argument("--probe_trials", default=1, type=int,
+        help="Number of probe trials to conduct")
     return P
 
 def parser_with_imle_args(P):
