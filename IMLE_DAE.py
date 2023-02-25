@@ -127,11 +127,6 @@ def evaluate(model, data_tr, data_val, scheduler, args, cur_step, nxz_data_tr=No
     loss_tr_mean = ImageLatentDataset.eval_model(nxz_data_tr, model, args, use_sampled_codes=False)
     loss_val_min = ImageLatentDataset.eval_model(nxz_data_val, model, args, use_sampled_codes=True)
     loss_val_mean = ImageLatentDataset.eval_model(nxz_data_val, model, args, use_sampled_codes=False)
-    
-    ignore_codes_model = nn.DataParallel(Utils.de_dataparallel(model).to_ignore_latent_imle_dae_mlp(), device_ids=args.gpus).to(device)
-    loss_tr_ignore_codes = ImageLatentDataset.eval_model(nxz_data_tr, ignore_codes_model, args)
-    loss_val_ignore_codes = ImageLatentDataset.eval_model(nxz_data_val, ignore_codes_model, args)
-    del ignore_codes_model
 
     loader_tr = DataLoader(data_tr,
         batch_size=args.bs,
@@ -145,7 +140,7 @@ def evaluate(model, data_tr, data_val, scheduler, args, cur_step, nxz_data_tr=No
 
     epoch = (cur_step // (len(loader_tr) * args.ipe)) - 1
 
-    tqdm.write(f"Epoch {epoch}/{args.epochs} - Step {cur_step}/{len(loader_tr) * args.ipe * args.epochs} - lr={scheduler.get_lr():.5e} loss/min/tr={loss_tr_min:.5f} loss/min/val={loss_val_min:.5f} loss/mean/tr={loss_tr_mean:.5f} loss/mean/val={loss_val_mean:.5f} loss/no_codes/tr={loss_tr_ignore_codes:.5f} loss/no_codes/val={loss_val_ignore_codes:.5f}")
+    tqdm.write(f"Epoch {epoch}/{args.epochs} - Step {cur_step}/{len(loader_tr) * args.ipe * args.epochs} - lr={scheduler.get_lr():.5e} loss/min/tr={loss_tr_min:.5f} loss/min/val={loss_val_min:.5f} loss/mean/tr={loss_tr_mean:.5f} loss/mean/val={loss_val_mean:.5f}")
 
     # Evaluate on the probing task
     if epoch % args.probe_iter == 0 or epoch == -1 or epoch == args.epochs - 1:
@@ -154,13 +149,13 @@ def evaluate(model, data_tr, data_val, scheduler, args, cur_step, nxz_data_tr=No
         tqdm.write(f"Computed epoch as {epoch}; not probing")
         probe_results = {}
 
-    wandb.log(probe_results | embedding_results | z_results | {
+    decoder_weight_one_stats = Utils.matrix_to_stats(model.module.decoder.lin1.weight, "decoder_layer_zero_weight")
+
+    wandb.log(probe_results | embedding_results | z_results | decoder_weight_one_stats | {
         "loss/min/tr": loss_tr_min,
         "loss/min/val": loss_val_min,
         "loss/mean/tr": loss_tr_mean,
         "loss/mean/val": loss_val_mean,
-        "loss/no_codes/tr": loss_tr_ignore_codes,
-        "loss/no_codes/val": loss_val_ignore_codes,
         "lr": scheduler.get_lr(),
         "train_step": cur_step,
         "images/val": wandb.Image(images_val),
@@ -390,6 +385,9 @@ def get_args(args=None):
     args.script = "imle" if args.script is None else args.script
     args.lrs = Utils.StepScheduler.process_lrs(args.lrs)
     args.probe_lrs = Utils.StepScheduler.process_lrs(args.probe_lrs)
+
+    if not args.probe_trials == 1:
+        raise NotImplementedError(f"Running multiple probe trials is currently not supported in a script that logs to WandB.")
     return args
 
 if __name__ == "__main__":
