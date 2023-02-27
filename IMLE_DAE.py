@@ -150,8 +150,10 @@ def evaluate(model, data_tr, data_val, scheduler, args, cur_step, nxz_data_tr=No
         probe_results = {}
 
     decoder_weight_one_stats = Utils.matrix_to_stats(model.module.decoder.lin1.weight, "decoder_layer_zero_weight")
+    encoder_weight_one_stats = Utils.matrix_to_stats(model.module.encoder.lin1.weight, "encoder_layer_zero_weight")
+    encoder_weight_two_stats = Utils.matrix_to_stats(model.module.encoder.lin2.weight, "encoder_layer_one_weight")
 
-    wandb.log(probe_results | embedding_results | z_results | decoder_weight_one_stats | {
+    wandb.log(probe_results | embedding_results | z_results | decoder_weight_one_stats | encoder_weight_one_stats | encoder_weight_two_stats | {
         "loss/min/tr": loss_tr_min,
         "loss/min/val": loss_val_min,
         "loss/mean/tr": loss_tr_mean,
