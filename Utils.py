@@ -15,6 +15,8 @@ from tqdm import tqdm
 import torch.multiprocessing
 torch.multiprocessing.set_sharing_strategy("file_descriptor")
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 def conditional_make_folder(f):
     try:
         os.makedirs(f)
@@ -74,7 +76,7 @@ def save_state(model, optimizer, args, epoch, folder):
     }
     _ = conditional_make_folder(folder)
     torch.save(state_dict, f"{folder}/{epoch}.pt")
-    model.to(torch.device("cuda") if torch.cuda.is_available() else "cpu")
+    model.to(device if torch.cuda.is_available() else "cpu")
 
 def set_seed(seed):
     """Seeds the program to use seed [seed]."""
@@ -119,6 +121,19 @@ def flatten(xs):
         return result
     else:
         return [xs]
+
+def hierararchical_hasattr(obj, attrs_list):
+    """Returns if the sequence of attributes in [attrs_list] accesses something
+    in object [obj]. Example: if the code `x = obj.a.b.c` would work, then
+    hierararchical_hasattr(x, ['a', 'b', 'c']) would be True.
+    """
+    x = obj
+    for attr in attrs_list:
+        if hasattr(x, attr):
+            x = getattr(obj, attr)
+        else:
+            return False
+    return True
 
 def images_to_pil_image(images):
     """Returns tensor datastructure [images] as a PIL image that can thus be

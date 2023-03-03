@@ -13,7 +13,7 @@ import Data
 import Models
 import Utils
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = "cpu" #torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def probe(model, loader_tr, loader_val, args):
     """Returns a dictionary giving the test accuracies of various kinds of

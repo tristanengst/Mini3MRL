@@ -5,7 +5,7 @@ from tqdm import tqdm as tqdm
 
 import Utils
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = Utils.device
 
 def get_model(args, imle=False):
     """Returns the model architecture specified in argparse Namespace [args].
@@ -13,6 +13,8 @@ def get_model(args, imle=False):
     """
     if args.arch == "mlp" and imle:
         return IMLE_DAE_MLP(args)
+    elif args.arch == "linear" and imle:
+        return IMLE_DAE_Linear(args)
     elif args.arch == "mlp" and not imle:
         return DAE_MLP(args)
     else:
@@ -64,6 +66,7 @@ class DAE_MLP(nn.Module):
         in_shape = x.shape
         return self.decoder(self.encoder(x)).view(*in_shape)
 
+
 class IMLE_DAE_MLP(nn.Module):
 
     def __init__(self, args, ignore_latents=False, latent_dim=512, **kwargs):
@@ -74,6 +77,7 @@ class IMLE_DAE_MLP(nn.Module):
         self.encoder = MLPEncoder(**vars(args))
         self.decoder = MLPDecoder(**vars(args))
         self.ada_in = IgnoreLatentAdaIN(**vars(args)) if ignore_latents else AdaIN(**vars(args))
+        self.feat_dim = args.feat_dim
 
     def get_codes(self, bs, device="cpu", seed=None):
         """Returns [bs] latent codes to be passed into the model.
@@ -106,12 +110,24 @@ class IMLE_DAE_MLP(nn.Module):
             use_mean_representation=use_mean_representation)
 
     def to_ignore_latent_imle_dae_mlp(self):
-        ignore_latent_imle_dae_mlp = IMLE_DAE_MLP(self.args,
+        ignore_latent_imle_dae_mlp = self.__class__(self.args,
             ignore_latents=True,
             latent_dim=self.latent_dim)
         ignore_latent_imle_dae_mlp.load_state_dict(self.state_dict(), strict=False)
         return ignore_latent_imle_dae_mlp
-        
+
+class IMLE_DAE_Linear(IMLE_DAE_MLP):
+
+    def __init__(self, *args, **kwargs):
+        super(IMLE_DAE_Linear, self).__init__(*args, **kwargs)
+        self.encoder = nn.Sequential(OrderedDict([
+            ("flatten",nn.Flatten()),
+            ("lin1", nn.Linear(784, self.feat_dim))]))
+        self.encoder.feat_dim = self.feat_dim
+
+        self.decoder = nn.Sequential(OrderedDict([
+            ("flatten",nn.Flatten()),
+            ("lin1", nn.Linear(self.feat_dim, 784))]))
 
 def get_codes(bs, code_dim, device="cpu", seed=None):
     """Returns [bs] latent codes to be passed into the model.
@@ -136,7 +152,9 @@ class EncoderWithAdaIn(nn.Module):
         super(EncoderWithAdaIn, self).__init__()
         self.encoder = encoder
         self.ada_in = ada_in
-        self.latent_dim = 512
+        self.latent_dim = self.ada_in.feat_dim
+        self.feat_dim = self.encoder.feat_dim
+
         self.use_mean_representation = use_mean_representation
 
     def get_codes(self, bs, device="cpu", seed=None):

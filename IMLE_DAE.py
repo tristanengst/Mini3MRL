@@ -17,7 +17,7 @@ import IO
 import LinearProbe
 import Utils
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = Utils.device
 
 import torch.multiprocessing
 torch.multiprocessing.set_sharing_strategy("file_system")
@@ -149,9 +149,18 @@ def evaluate(model, data_tr, data_val, scheduler, args, cur_step, nxz_data_tr=No
         tqdm.write(f"Computed epoch as {epoch}; not probing")
         probe_results = {}
 
-    decoder_weight_one_stats = Utils.matrix_to_stats(model.module.decoder.lin1.weight, "decoder_layer_zero_weight")
-    encoder_weight_one_stats = Utils.matrix_to_stats(model.module.encoder.lin1.weight, "encoder_layer_zero_weight")
-    encoder_weight_two_stats = Utils.matrix_to_stats(model.module.encoder.lin2.weight, "encoder_layer_one_weight")
+    if Utils.hierararchical_hasattr(model.module, ["decoder", "lin1", "weight"]):
+        decoder_weight_one_stats = Utils.matrix_to_stats(model.module.decoder.lin1.weight, "decoder_layer_zero_weight")
+    else:
+        decoder_weight_one_stats = {}
+    if Utils.hierararchical_hasattr(model.module, ["encoder", "lin1", "weight"]):
+        encoder_weight_one_stats = Utils.matrix_to_stats(model.module.encoder.lin1.weight, "encoder_layer_zero_weight")
+    else:
+        encoder_weight_one_stats = {}
+    if Utils.hierararchical_hasattr(model.module, ["encoder", "lin2", "weight"]):
+        encoder_weight_two_stats = Utils.matrix_to_stats(model.module.encoder.lin2.weight, "encoder_layer_one_weight")
+    else:
+        encoder_weight_two_stats = {}
 
     wandb.log(probe_results | embedding_results | z_results | decoder_weight_one_stats | encoder_weight_one_stats | encoder_weight_two_stats | {
         "loss/min/tr": loss_tr_min,
