@@ -47,6 +47,8 @@ def evaluate(model, data_tr, data_val, scheduler, args, cur_step, nxz_data_tr=No
     nxz_data_tr -- ImageLatentDataset over the training data, or None to create
                     it on the fly from [data_tr]
     """
+    
+
     # Get ImageLatentDatasets as needed
     if nxz_data_tr is None:
         nxz_data_tr = ImageLatentDataset.get_image_latent_dataset(
@@ -219,6 +221,7 @@ class ImageLatentDataset(Dataset):
                 leave=False,
                 dynamic_ncols=True):
 
+
                 if mode == "no_noise":
                     model_input = (x.to(device, non_blocking=True),)
                 elif mode == "pre_fuse":
@@ -226,6 +229,8 @@ class ImageLatentDataset(Dataset):
                 elif mode == "post_fuse":
                     z = z.to(device, non_blocking=True) if use_sampled_codes else None
                     model_input = (xn.to(device, non_blocking=True), z)
+
+                
                     
                 fxn = encoder(*model_input).cpu()
 

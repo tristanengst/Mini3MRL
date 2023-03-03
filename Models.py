@@ -126,8 +126,8 @@ class IMLE_DAE_Linear(IMLE_DAE_MLP):
         self.encoder.feat_dim = self.feat_dim
 
         self.decoder = nn.Sequential(OrderedDict([
-            ("flatten",nn.Flatten()),
-            ("lin1", nn.Linear(self.feat_dim, 784))]))
+            ("lin1", nn.Linear(self.feat_dim, 784)),
+            ("sigmoid", nn.Sigmoid())]))
 
 def get_codes(bs, code_dim, device="cpu", seed=None):
     """Returns [bs] latent codes to be passed into the model.

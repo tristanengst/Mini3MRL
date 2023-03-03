@@ -130,7 +130,7 @@ def hierararchical_hasattr(obj, attrs_list):
     x = obj
     for attr in attrs_list:
         if hasattr(x, attr):
-            x = getattr(obj, attr)
+            x = getattr(x, attr)
         else:
             return False
     return True
