@@ -13,7 +13,7 @@ import io
 from tqdm import tqdm
 
 import torch.multiprocessing
-torch.multiprocessing.set_sharing_strategy("file_system")
+torch.multiprocessing.set_sharing_strategy("file_descriptor")
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 

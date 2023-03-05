@@ -114,4 +114,7 @@ def parser_with_imle_args(P):
         help="Architecture for noise injection")
     P.add_argument("--adain_x_norm", default="none", choices=["none", "norm"],
         help="Kind of normalization in AdaIN")
+    P.add_argument("--zero_half_target", choices=[0, 1], default=0, type=int,
+        help="Whether half the target (bottom or top, randomly) should be zeroed out")
     return P
+

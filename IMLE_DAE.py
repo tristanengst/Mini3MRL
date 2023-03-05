@@ -20,7 +20,7 @@ import Utils
 device = Utils.device
 
 import torch.multiprocessing
-torch.multiprocessing.set_sharing_strategy("file_system")
+torch.multiprocessing.set_sharing_strategy("file_descriptor")
 
 def imle_model_folder(args, make_folder=False):
     data_str = Data.dataset_pretty_name(args.data_tr)
@@ -230,8 +230,6 @@ class ImageLatentDataset(Dataset):
                     z = z.to(device, non_blocking=True) if use_sampled_codes else None
                     model_input = (xn.to(device, non_blocking=True), z)
 
-                
-                    
                 fxn = encoder(*model_input).cpu()
 
                 embeddings.append(fxn)
@@ -365,6 +363,14 @@ class ImageLatentDataset(Dataset):
                 stop_idx = min(start_idx + args.code_bs, len(dataset))
                 x = x.to(device, non_blocking=True)
                 xn = Utils.with_noise(x, std=args.std)
+                
+                # Sanity check for IMLE. This should force the model to learn to
+                # drop either the top of bottom of images it generates.
+                if args.zero_half_target:
+                    drop_top_idxs = torch.rand(len(x)) < .5
+                    drop_bottom_idxs = ~drop_top_idxs
+                    x[drop_top_idxs, :, :14, :] = 0
+                    x[drop_bottom_idxs, :, 14:, :] = 0
 
                 for sample_idx in tqdm(range(args.ns),
                     desc="Sampling inner loop",
@@ -376,6 +382,7 @@ class ImageLatentDataset(Dataset):
                     losses = loss_fn(fxn, x)
                     losses = torch.sum(losses.view(len(x), -1), dim=1)
 
+                    # torch.where
                     change_idxs = (losses < least_losses[start_idx:stop_idx])
                     least_losses[start_idx:stop_idx][change_idxs] = losses[change_idxs]
                     best_latents[start_idx:stop_idx][change_idxs] = z[change_idxs]
@@ -481,7 +488,7 @@ if __name__ == "__main__":
             loss = loss_fn(fxn, x)
             loss.backward()
             optimizer.step()
-            optimizer.zero_grad(set_to_none=True)
+            model.zero_grad(set_to_none=True)
             cur_step += 1
 
         # Otherwise the worker threads hang around and cause problems?
