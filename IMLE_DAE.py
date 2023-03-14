@@ -482,8 +482,6 @@ class ImageLatentDataset(Dataset):
                     losses = loss_fn(fxn, x)
                     losses = torch.sum(losses.view(len(x), -1), dim=1)
 
-                    tqdm.write(f"LOSSES: {torch.min(losses, dim=1)}")
-
                     # Ke thought the code below was wrong due to a common mistake
                     # in how people do indexing, but it actually does pass sanity
                     # checks. Still, it might be worth investigating further.
@@ -497,11 +495,6 @@ class ImageLatentDataset(Dataset):
         
         noised_images = torch.cat(noised_images, dim=0)
         images = torch.cat(images, dim=0)
-
-        tqdm.write(f"LOSSES 2: {model(noised_images, best_latents)}")
-
-
-
         return ImageLatentDataset(dataset, noised_images, best_latents.cpu(), images)
 
 def get_args(args=None):
