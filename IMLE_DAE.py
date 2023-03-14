@@ -199,7 +199,9 @@ class ImageLatentDataset(Dataset):
         Args:
         post_fuse   -- get embeddings after or before fusing them with codes
         """
-        idxs = Utils.sample(range(len(nxz_data)), k=k, seed=args.seed)
+        idxs = Utils.sample(range(len(nxz_data)),
+            k=min(args.bs, len(nxz_data)),
+            seed=args.seed)
         data = Subset(Data.ZipDataset(nxz_data.data, nxz_data), indices=idxs)
         loader = DataLoader(data,
             batch_size=args.code_bs,
@@ -596,7 +598,6 @@ if __name__ == "__main__":
             pin_memory=True,
             batch_size=args.bs,
             persistent_workers=True,
-            init_fn=Utils.set_worker_sharing_strategy,
             num_workers=args.num_workers)
         chain_loader = itertools.chain(*[loader] * args.ipe)
         chain_loader_len = len(loader) * args.ipe
