@@ -28,7 +28,7 @@ def imle_model_folder(args, make_folder=False):
     suffix = "" if args.suffix is None else f"-{args.suffix}"
     job_id = "" if args.job_id is None else f"-{args.job_id}"
     lrs = "_".join([f"{lr:.2e}" for idx,lr in enumerate(args.lrs) if idx % 2 == 1])
-    folder = f"{args.save_folder}/models_{args.script}/{args.script}-{data_str}-bs{args.bs}-epochs{args.epochs}-feat_dim{args.feat_dim}-ipe{args.ipe}-leakyrelu{args.leaky_relu}-lr{lrs}-ns{args.ns}-nshot{args.n_way}-nway{args.n_shot}-seed{args.seed}-{args.uid}{job_id}{suffix}"
+    folder = f"{args.save_folder}/models_{args.script}/{args.script}-{data_str}-bs{args.bs}-epochs{args.epochs}-feat_dim{args.feat_dim}-ipe{args.ipe}-leakyrelu{args.leaky_relu}-lr{lrs}-ns{args.ns}-nshot{args.n_shot}-nway{args.n_way}-seed{args.seed}-{args.uid}{job_id}{suffix}"
 
     if make_folder:
         Utils.conditional_make_folder(folder)
@@ -243,8 +243,14 @@ class ImageLatentDataset(Dataset):
         return embeddings, targets
         
     @staticmethod
-    def generate_images(nxz_data, model, args, idxs=None, num_images=None, num_samples=None, seed=None):
-        """Returns a PIL image from running [model] on [nxz_data].
+    def generate_images(nxz_data, model, args, idxs=None, num_images=None, num_samples=None, seed=None, use_sampled_codes=False):
+        """Returns a PIL image from running [model] on [nxz_data]. Each row in
+        the image contains:
+        (1) a target image
+        (2) a noised image for the target image
+        (3) [model] applied to the noised image and a latent code sampled
+            for it and the target image
+        (4) images given by [model] run on the noised image with random latents
         
         Args:
         nxz_data    -- ImageLatentDataset containing images
@@ -266,34 +272,30 @@ class ImageLatentDataset(Dataset):
         
         num_samples = args.num_eval_samples if num_samples is None else num_samples
 
-        data = Subset(Data.ZipDataset(nxz_data.data, nxz_data), indices=idxs)
+        data = Subset(nxz_data, indices=idxs)
+        gen_images_batch_size = max(1, args.code_bs // num_samples)
         loader = DataLoader(data,
-            batch_size=max(1, args.code_bs // num_samples),
+            batch_size=gen_images_batch_size,
             num_workers=args.num_workers,
             pin_memory=True)
 
-        image_shape = data[0][0][0].shape
+        output = torch.zeros(len(data), num_samples+3, *nxz_data[0][2].shape)
 
         with torch.no_grad():
-            inputs, noised_inputs, generates = [], [], []
-            for (x,_),(nx,_,_) in tqdm(loader,
+            for idx,(nx,z,x) in tqdm(enumerate(loader),
                 desc="Generating images from ImageLatentDataset",
                 total=len(loader),
                 leave=False,
                 dynamic_ncols=True):
+                start_idx = idx * gen_images_batch_size
+                stop_idx = min(len(data), (idx+1) * gen_images_batch_size)
 
-                fx = model(nx, num_z=num_samples, seed=args.seed).cpu()
-                inputs.append(x)
-                noised_inputs.append(nx)
-                generates.append(fx)
+                output[start_idx:stop_idx, 0] = x
+                output[start_idx:stop_idx, 1] = nx
+                output[start_idx:stop_idx, 2] = model(nx, z).cpu()
+                output[start_idx:stop_idx, 3:] = model(nx, num_z=num_samples, seed=args.seed).view(len(data), num_samples, *nxz_data[0][2].shape).cpu()
 
-        inputs = torch.cat(inputs, dim=0).unsqueeze(1)
-        noised_inputs = torch.cat(noised_inputs, dim=0).unsqueeze(1)
-        generates = torch.cat(generates, dim=0).view(len(idxs), num_samples, *image_shape)
-
-        images = torch.cat([inputs, noised_inputs, generates], dim=1)
-        images = images.view(len(idxs), num_samples + 2, *image_shape)
-        return Utils.images_to_pil_image(images)
+        return Utils.images_to_pil_image(output)
 
     @staticmethod
     def eval_model(nxz_data, model, args, loss_fn=None, use_sampled_codes=True):
