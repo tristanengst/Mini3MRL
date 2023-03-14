@@ -22,7 +22,6 @@ device = Utils.device
 
 import torch.multiprocessing
 torch.multiprocessing.set_sharing_strategy("file_system")
-torch.multiprocessing.set_start_method('spawn')
 
 def imle_model_folder(args, make_folder=False):
     data_str = Data.dataset_pretty_name(args.data_tr)
@@ -596,7 +595,8 @@ if __name__ == "__main__":
             shuffle=True,
             pin_memory=True,
             batch_size=args.bs,
-            persistent_workers=True,
+            persistent_workers=False,
+            init_fn=Utils.set_worker_sharing_strategy,
             num_workers=args.num_workers)
         chain_loader = itertools.chain(*[loader] * args.ipe)
         chain_loader_len = len(loader) * args.ipe

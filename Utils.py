@@ -198,6 +198,9 @@ def sorted_namespace(args):
     d = vars(args)
     return argparse.Namespace(**{k: d[k] for k in sorted(d.keys())})
 
+def set_worker_sharing_strategy(worker_id: int) -> None:
+    torch.multiprocessing.set_sharing_strategy("file_system")
+
 class StepScheduler:
     """StepLR but with easier control.
     
