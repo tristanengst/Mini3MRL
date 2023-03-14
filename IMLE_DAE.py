@@ -438,14 +438,14 @@ class ImageLatentDataset(Dataset):
         loss_fn -- distance function that returns a BSx... tensor of distances
                     given BSx... inputs. Typically, this means 'reduction' must
                     be 'none'
-        dataset -- dataset of non-noised images to get codes for
+        dataset -- ImageFolder-like dataset of non-noised images to get codes for
         args    -- argparse Namespace
         """
         with torch.no_grad():
             least_losses = torch.ones(len(dataset), device=device) * float("inf")
             best_latents = Utils.de_dataparallel(model).get_codes(len(dataset), device=device)
-            images = []
-            noised_images = []
+            images = torch.zeros(len(dataset), *dataset[0][0].shape)
+            noised_images = torch.zeros(len(dataset), *dataset[0][0].shape)
 
             loader = DataLoader(dataset,
                 batch_size=args.code_bs,
@@ -472,6 +472,9 @@ class ImageLatentDataset(Dataset):
                     x[drop_top_idxs, :, :14, :] = 0
                     x[drop_bottom_idxs, :, 14:, :] = 0
 
+                noised_images[start_idx:stop_idx] = xn.cpu()
+                images[start_idx:stop_idx] = x.cpu()
+
                 for sample_idx in tqdm(range(args.ns),
                     desc="Sampling inner loop",
                     leave=False,
@@ -489,12 +492,6 @@ class ImageLatentDataset(Dataset):
                     least_losses[start_idx:stop_idx][change_idxs] = losses[change_idxs]
                     best_latents[start_idx:stop_idx][change_idxs] = z[change_idxs]
 
-                # Adding copy() here was suggested by Ke.
-                noised_images.append(xn.cpu().copy())
-                images.append(x.cpu().copy())
-        
-        noised_images = torch.cat(noised_images, dim=0)
-        images = torch.cat(images, dim=0)
         return ImageLatentDataset(dataset, noised_images, best_latents.cpu(), images)
 
 def get_args(args=None):
