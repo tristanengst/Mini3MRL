@@ -22,6 +22,7 @@ device = Utils.device
 
 import torch.multiprocessing
 torch.multiprocessing.set_sharing_strategy("file_system")
+torch.multiprocessing.set_start_method('spawn')
 
 def imle_model_folder(args, make_folder=False):
     data_str = Data.dataset_pretty_name(args.data_tr)
