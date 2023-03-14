@@ -595,7 +595,7 @@ if __name__ == "__main__":
             shuffle=True,
             pin_memory=True,
             batch_size=args.bs,
-            persistent_workers=False,
+            persistent_workers=True,
             init_fn=Utils.set_worker_sharing_strategy,
             num_workers=args.num_workers)
         chain_loader = itertools.chain(*[loader] * args.ipe)
