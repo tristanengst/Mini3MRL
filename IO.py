@@ -104,6 +104,8 @@ def parser_with_probe_args(P):
     return P
 
 def parser_with_imle_args(P):
+    P.add_argument("--debug", default=0, type=int,
+        help="Debugging mode")
     P.add_argument("--ns", default=128, type=int,
         help="Number of latent codes to take the min over per image")
     P.add_argument("--code_bs",type=int, default=60000,
@@ -114,6 +116,12 @@ def parser_with_imle_args(P):
         help="Architecture for noise injection")
     P.add_argument("--adain_x_norm", default="none", choices=["none", "norm"],
         help="Kind of normalization in AdaIN")
+    P.add_argument("--mapping_net_h_dim", default=512, type=int,
+        help="Hidden dimensionality of mapping network")
+    P.add_argument("--mapping_net_layers", default=8, type=int,
+        help="Number of layers in AdaIN mapping network")
+    P.add_argument("--latent_dim", default=512, type=int,
+        help="Latent code dimensionality")
     P.add_argument("--zero_half_target", choices=[0, 1], default=0, type=int,
         help="Whether half the target (bottom or top, randomly) should be zeroed out")
     return P

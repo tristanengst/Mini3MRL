@@ -2,6 +2,7 @@ import argparse
 import os
 import itertools
 import numpy as np
+import sys
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset, Subset
@@ -20,7 +21,7 @@ import Utils
 device = Utils.device
 
 import torch.multiprocessing
-torch.multiprocessing.set_sharing_strategy("file_descriptor")
+torch.multiprocessing.set_sharing_strategy("file_system")
 
 def imle_model_folder(args, make_folder=False):
     data_str = Data.dataset_pretty_name(args.data_tr)
@@ -53,12 +54,12 @@ def evaluate(model, data_tr, data_val, scheduler, args, cur_step, nxz_data_tr=No
     if nxz_data_tr is None:
         nxz_data_tr = ImageLatentDataset.get_image_latent_dataset(
             model=model,
-            loss_fn=nn.BCELoss(reduction="none"),
+            loss_fn=nn.BCEWithLogitsLoss(reduction="none"),
             dataset=data_tr,
             args=args)
     nxz_data_val = ImageLatentDataset.get_image_latent_dataset(
         model=model,
-        loss_fn=nn.BCELoss(reduction="none"),
+        loss_fn=nn.BCEWithLogitsLoss(reduction="none"),
         dataset=data_val,
         args=args)
 
@@ -306,7 +307,7 @@ class ImageLatentDataset(Dataset):
                                 expected loss)
         """
         loss, total = 0, 0
-        loss_fn = nn.BCELoss(reduction="mean") if loss_fn is None else loss_fn
+        loss_fn = nn.BCEWithLogitsLoss(reduction="mean") if loss_fn is None else loss_fn
         with torch.no_grad():
             loader = DataLoader(nxz_data,
                 batch_size=args.code_bs,
@@ -327,7 +328,106 @@ class ImageLatentDataset(Dataset):
                 total += len(x)
         
         return loss.item() / total
+
+    @staticmethod
+    def get_and_eval_image_latent_dataset(model, loss_fn, dataset, args):
+        """Returns an ImageLatentDataset giving noised images and codes for
+        [model] to use in IMLE training. 
+
+        Args:
+        model   -- IMLE model
+        loss_fn -- distance function that returns a BSx... tensor of distances
+                    given BSx... inputs. Typically, this means 'reduction' must
+                    be 'none'
+        dataset -- dataset of non-noised images to get codes for
+        args    -- argparse Namespace
+        """
+        with torch.no_grad():
+            least_losses = torch.ones(len(dataset), device=device) * float("inf")
+            best_latents = Utils.de_dataparallel(model).get_codes(len(dataset), device=device)
+            images = []
+            noised_images = []
+
+            all_losses = torch.ones(len(dataset), args.ns) * float("inf")
+            all_outputs = torch.zeros(len(dataset), args.ns, *dataset[0][0].shape)
+            all_latents = torch.zeros(len(dataset), args.ns, args.latent_dim)
+
+            loader = DataLoader(dataset,
+                batch_size=args.code_bs,
+                num_workers=args.num_workers,
+                shuffle=False,
+                pin_memory=True)
+
+            for idx,(x,_) in tqdm(enumerate(loader),
+                desc="Sampling outer loop",
+                total=len(loader),
+                leave=False,
+                dynamic_ncols=True):
+
+                start_idx = idx * args.code_bs
+                stop_idx = min(start_idx + args.code_bs, len(dataset))
+                x = x.to(device, non_blocking=True)
+                xn = Utils.with_noise(x, std=args.std)
                 
+                # Sanity check for IMLE. This should force the model to learn to
+                # drop either the top of bottom of images it generates.
+                if args.zero_half_target:
+                    drop_top_idxs = torch.rand(len(x)) < .5
+                    drop_bottom_idxs = ~drop_top_idxs
+                    x[drop_top_idxs, :, :14, :] = 0
+                    x[drop_bottom_idxs, :, 14:, :] = 0
+
+                for sample_idx in tqdm(range(args.ns),
+                    desc="Sampling inner loop",
+                    leave=False,
+                    dynamic_ncols=True):
+
+                    z = Utils.de_dataparallel(model).get_codes(len(xn), device=xn.device)
+                    fxn = model(xn, z)
+                    losses = loss_fn(fxn, x)
+                    losses = torch.sum(losses.view(len(x), -1), dim=1)
+
+                    change_idxs = (losses < least_losses[start_idx:stop_idx])
+                    least_losses[start_idx:stop_idx][change_idxs] = losses[change_idxs]
+                    best_latents[start_idx:stop_idx][change_idxs] = z[change_idxs]
+
+                    all_losses[start_idx:stop_idx, sample_idx] = losses.cpu()
+                    all_outputs[start_idx:stop_idx, sample_idx] = fxn.cpu()
+                    all_latents[start_idx:stop_idx, sample_idx] = z.cpu()
+
+                noised_images.append(xn.cpu())
+                images.append(x.cpu())
+
+        noised_images = torch.cat(noised_images, dim=0)
+        images = torch.cat(images, dim=0)
+
+        p = Models.PixelNormLayer()
+
+        tqdm.write(f"ALL LATENTS\n{all_latents}")
+        tqdm.write(f"ALL LATENTS NORMS {torch.linalg.norm(all_latents, dim=-1)}")
+
+        all_z = model.module.ada_in.model(all_latents.reshape(len(x) * args.ns, -1).to(device)).view(len(x), args.ns, -1)
+        all_z[:, :, :args.feat_dim] = all_z[:, :, :args.feat_dim] - model.module.ada_in.z_shift_mean
+        all_z[:, :, args.feat_dim:] = all_z[:, :, args.feat_dim:] - model.module.ada_in.z_scale_mean
+        all_z_norm = torch.linalg.norm(all_z, dim=-1)
+
+        all_z = all_z.view(len(x), args.ns, -1).cpu()
+
+        tqdm.write(f"ALL Z MAPPED NORM {all_z_norm}")
+
+        tqdm.write(f"ALL LOSSES\n{all_losses}")
+        tqdm.write(f"LEAST LOSSES\n{least_losses}")
+
+        best_outputs = model(noised_images, best_latents).cpu()
+
+        all_outputs = torch.cat([images.unsqueeze(1),
+            best_outputs.unsqueeze(1),
+            all_outputs], dim=1)
+
+        all_outputs = Utils.images_to_pil_image(all_outputs)
+        all_outputs.save("IMLE-SSL_debugging_output.png")
+        
+
     @staticmethod
     def get_image_latent_dataset(model, loss_fn, dataset, args):
         """Returns an ImageLatentDataset giving noised images and codes for
@@ -382,16 +482,26 @@ class ImageLatentDataset(Dataset):
                     losses = loss_fn(fxn, x)
                     losses = torch.sum(losses.view(len(x), -1), dim=1)
 
-                    # torch.where
+                    tqdm.write(f"LOSSES: {torch.min(losses, dim=1)}")
+
+                    # Ke thought the code below was wrong due to a common mistake
+                    # in how people do indexing, but it actually does pass sanity
+                    # checks. Still, it might be worth investigating further.
                     change_idxs = (losses < least_losses[start_idx:stop_idx])
                     least_losses[start_idx:stop_idx][change_idxs] = losses[change_idxs]
                     best_latents[start_idx:stop_idx][change_idxs] = z[change_idxs]
 
-                noised_images.append(xn.cpu())
-                images.append(x.cpu())
-
+                # Adding copy() here was suggested by Ke.
+                noised_images.append(xn.cpu().copy())
+                images.append(x.cpu().copy())
+        
         noised_images = torch.cat(noised_images, dim=0)
         images = torch.cat(images, dim=0)
+
+        tqdm.write(f"LOSSES 2: {model(noised_images, best_latents)}")
+
+
+
         return ImageLatentDataset(dataset, noised_images, best_latents.cpu(), images)
 
 def get_args(args=None):
@@ -443,9 +553,35 @@ if __name__ == "__main__":
     tqdm.write(f"MODEL\n{model.module}")
     
     scheduler = Utils.StepScheduler(optimizer, args.lrs)
-    loss_fn = nn.BCELoss()
+    loss_fn = nn.BCEWithLogitsLoss()
 
     data_tr, data_val = Data.get_data_from_args(args)
+
+    if args.debug == 1:
+        _ = ImageLatentDataset.get_and_eval_image_latent_dataset(model=model,
+            loss_fn=nn.BCEWithLogitsLoss(reduction="none"),
+            dataset=data_tr,
+            args=args)
+        sys.exit(0)
+    elif args.debug == 2:
+        for idx in range(0, 15, 2):
+            w = model.module.ada_in.model.mapping_net.model[idx].weight
+            stats = Utils.matrix_to_stats(w, matrix_name=str(idx))
+            for k,v in stats.items():
+                tqdm.write(f"---------------------------------------\n{k}\n{v}")
+
+        tqdm.write("===========================================================")
+
+        stats = Utils.matrix_to_stats(model.module.decoder.lin1.weight, "decoder_layer_zero_weight")
+        for k,v in stats.items():
+            tqdm.write(f"---------------------------------------\n{k}\n{v}")
+        stats = Utils.matrix_to_stats(model.module.encoder.lin1.weight, "encoder_layer_zero_weight")
+        for k,v in stats.items():
+            tqdm.write(f"---------------------------------------\n{k}\n{v}")
+        stats = Utils.matrix_to_stats(model.module.encoder.lin2.weight, "encoder_layer_one_weight")
+        for k,v in stats.items():
+            tqdm.write(f"---------------------------------------\n{k}\n{v}")
+        sys.exit(0)        
         
     tqdm.write(f"TRAINING DATA\n{data_tr}")
     tqdm.write(f"VALIDATION DATA\n{data_val}")
@@ -462,7 +598,7 @@ if __name__ == "__main__":
 
         epoch_dataset = ImageLatentDataset.get_image_latent_dataset(
             model=model,
-            loss_fn=nn.BCELoss(reduction="none"),
+            loss_fn=nn.BCEWithLogitsLoss(reduction="none"),
             dataset=data_tr,
             args=args)
         loader = DataLoader(epoch_dataset,

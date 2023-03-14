@@ -33,7 +33,7 @@ def dae_model_folder(args, make_folder=False):
     return folder
 
 def evaluate(model, loader_tr, loader_val, scheduler, args, cur_step):
-    eval_loss_fn = nn.BCELoss(reduction="sum")
+    eval_loss_fn = nn.BCEWithLogitsLoss(reduction="sum")
     loss_tr, loss_val = 0, 0
     total_tr, total_val = 0, 0
     with torch.no_grad():
@@ -141,7 +141,7 @@ if __name__ == "__main__":
         name=os.path.basename(dae_model_folder(args)))
     
     scheduler = Utils.StepScheduler(optimizer, args.lrs)
-    loss_fn = nn.BCELoss()
+    loss_fn = nn.BCEWithLogitsLoss()
 
     data_tr, data_val = Data.get_data_from_args(args)
         

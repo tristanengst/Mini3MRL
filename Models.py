@@ -46,13 +46,11 @@ class MLPDecoder(nn.Module):
         self.lin1 = nn.Linear(feat_dim, h_dim)
         self.relu = nn.ReLU(True)
         self.lin2 = nn.Linear(h_dim, out_dim)
-        self.sigmoid = nn.Sigmoid() # Targets are expected to be in [0, 1]
 
     def forward(self, x):
         fx = self.lin1(x)
         fx = self.relu(fx)
         fx = self.lin2(fx)
-        fx = self.sigmoid(fx)
         return fx
 
 class DAE_MLP(nn.Module):
@@ -69,15 +67,15 @@ class DAE_MLP(nn.Module):
 
 class IMLE_DAE_MLP(nn.Module):
 
-    def __init__(self, args, ignore_latents=False, latent_dim=512, **kwargs):
+    def __init__(self, args, ignore_latents=False, **kwargs):
         super(IMLE_DAE_MLP, self).__init__()
         self.args = args
-        self.latent_dim = latent_dim
         self.ignore_latents = ignore_latents
         self.encoder = MLPEncoder(**vars(args))
         self.decoder = MLPDecoder(**vars(args))
         self.ada_in = IgnoreLatentAdaIN(**vars(args)) if ignore_latents else AdaIN(**vars(args))
         self.feat_dim = args.feat_dim
+        self.latent_dim = args.latent_dim
 
     def get_codes(self, bs, device="cpu", seed=None):
         """Returns [bs] latent codes to be passed into the model.
@@ -111,8 +109,7 @@ class IMLE_DAE_MLP(nn.Module):
 
     def to_ignore_latent_imle_dae_mlp(self):
         ignore_latent_imle_dae_mlp = self.__class__(self.args,
-            ignore_latents=True,
-            latent_dim=self.latent_dim)
+            ignore_latents=True)
         ignore_latent_imle_dae_mlp.load_state_dict(self.state_dict(), strict=False)
         return ignore_latent_imle_dae_mlp
 
@@ -126,8 +123,7 @@ class IMLE_DAE_Linear(IMLE_DAE_MLP):
         self.encoder.feat_dim = self.feat_dim
 
         self.decoder = nn.Sequential(OrderedDict([
-            ("lin1", nn.Linear(self.feat_dim, 784)),
-            ("sigmoid", nn.Sigmoid())]))
+            ("lin1", nn.Linear(self.feat_dim, 784))]))
 
 def get_codes(bs, code_dim, device="cpu", seed=None):
     """Returns [bs] latent codes to be passed into the model.
@@ -298,10 +294,10 @@ def get_lin_layer(in_dim, out_dim, equalized_lr=True, bias=True, **kwargs):
 
 class NormLayer(nn.Module):
     """Neural network layer that normalizes its input to have unit norm.
-    Normalization occurs over the flattened dimensions of each sample.
+    Normalization occurs over the last dimension of the sample.
     """
     def __init__(self): super(NormLayer, self).__init__()
-    def forward(self, x): return nn.functional.normalize(x.view(x.shape[0], -1), dim=1).view(*x.shape)
+    def forward(self, x): return nn.functional.normalize(x, dim=-1).view(*x.shape)
 
 
 class PixelNormLayer(nn.Module):
@@ -312,7 +308,7 @@ class PixelNormLayer(nn.Module):
         self.epsilon = epsilon
 
     def forward(self, x):
-        return x * torch.rsqrt(torch.mean(x ** 2, dim=1, keepdim=True) + self.epsilon)
+        return x * torch.rsqrt(torch.mean(x ** 2, dim=-1, keepdim=True) + self.epsilon)
 
 class EqualizedLinear(nn.Module):
     """Linear layer with equalized learning rate and custom learning rate multiplier.
