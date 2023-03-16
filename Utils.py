@@ -53,6 +53,25 @@ def with_noise(x, std=.8, seed=None):
         noise.normal_(generator=torch.Generator(x.device).manual_seed(seed))
         return x + noise * std
 
+def save_code_under_folder(folder):
+    """Saves the code in the current working directory under [folder] if they
+    have not already been saved there. For now, all code files are expected
+    to be siblings of the current file.
+    """
+    code_folder = f"{folder}/code"
+    os.makedirs(code_folder)
+    files = sorted([f for f in os.listdir(os.path.dirname(__file__))
+        if f.endswith(".py")])
+    file_for_diffs = ""
+    for f in files:
+        with open(f, "r") as opened_file:
+            code = opened_file.read()
+            file_for_diffs += f"---\n{os.path.basename(f)}\n---\n{code}\n\n\n"
+            with open(f"{code_folder}/{f}", "w+") as file_to_write:
+                file_to_write.write(code)
+    with open(f"{folder}/all_code.txt", "w+") as f:
+        f.write(file_for_diffs)
+
 def save_state(model, optimizer, args, epoch, folder):
     """Saves [model], [optimizer], [args], and [epoch] along with Python, NumPy,
     and PyTorch random seeds to 'folder/epoch.pt'.

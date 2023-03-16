@@ -53,7 +53,7 @@ def parser_with_logging_args(P):
     P.add_argument("--num_eval_images", type=int, default=10,
         help="Number of images generate to generate from when logging images during evaluation")
     P.add_argument("--num_eval_samples", type=int, default=10,
-        help="Number of latent codes per imagewhen logging images during evaluation")
+        help="Number of latent codes per image when logging images during evaluation")
     return P
 
 def parser_with_data_args(P):
@@ -68,7 +68,7 @@ def parser_with_data_args(P):
     return P
 
 def parser_with_training_args(P):
-    P.add_argument("--arch", choices=["mlp", "mlp_bn", "mlp_ln", "linear"], default="mlp",
+    P.add_argument("--arch", choices=["mlp"], default="mlp",
         help="Model architecture")
     P.add_argument("--feat_dim", type=int, default=64,
         help="Dimensionality of the features extracted by the model")
@@ -82,6 +82,12 @@ def parser_with_training_args(P):
         help="Batch size")
     P.add_argument("--std",type=float, default=.8,
         help="Noise standard deviation")
+    P.add_argument("--num_encoder_layers", type=int, default=2,
+        help="Number of encoder layers")
+    P.add_argument("--num_decoder_layers", type=int, default=2,
+        help="Number of encoder layers")
+    P.add_argument("--wd", type=float, default=1e-5,
+        help="Weight decay on generative task")
     return P
 
 def parser_with_probe_args(P):
@@ -98,7 +104,7 @@ def parser_with_probe_args(P):
     P.add_argument("--probe_verbosity", choices=[0, 1], default=1, type=int,
         help="Probe verbosity.")
     P.add_argument("--probe_normalize_feats", choices=[0, 1], default=0, type=int,
-        help="Probe verbosity.")
+        help="Whether features input to the probes should be normalized")
     P.add_argument("--probe_trials", default=1, type=int,
         help="Number of probe trials to conduct")
     return P
@@ -108,9 +114,9 @@ def parser_with_imle_args(P):
         help="Debugging mode")
     P.add_argument("--ns", default=128, type=int,
         help="Number of latent codes to take the min over per image")
-    P.add_argument("--code_bs",type=int, default=60000,
+    P.add_argument("--code_bs", type=int, default=60000,
         help="Number of images to sample codes for at once")
-    P.add_argument("--ipe", default=50, type=int,
+    P.add_argument("--ipe", default=20, type=int,
         help="Number of gradient steps per code.")
     P.add_argument("--latent_arch", choices=["v0", "v1", "v2"], default="v0",
         help="Architecture for noise injection")

@@ -228,7 +228,7 @@ class ImageFolderSubset(Dataset):
         self.n_way = len(self.class2idx)
         self.n_shot = len(self.samples) // self.n_way # This is an average
         
-    def __str__(self): return f"{self.__class__.__name__} [root={self.root} length={self.__len__()} n_shot={self.n_shot} n_way={self.n_way}\n{self.transform}]"
+    def __str__(self): return f"{self.__class__.__name__} [root={self.root} length={self.__len__()} n_shot={self.n_shot} n_way={self.n_way} transform={self.transform}]"
 
     def __len__(self): return len(self.indices)
 

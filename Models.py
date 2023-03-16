@@ -13,45 +13,71 @@ def get_model(args, imle=False):
     """
     if args.arch == "mlp" and imle:
         return IMLE_DAE_MLP(args)
-    elif args.arch == "linear" and imle:
-        return IMLE_DAE_Linear(args)
     elif args.arch == "mlp" and not imle:
         return DAE_MLP(args)
     else:
         raise NotImplementedError()
 
-class MLPEncoder(nn.Module):
+class MLP(nn.Module):
+    def __init__(self, in_dim, h_dim=256, out_dim=42, layers=2, 
+        act_type="leakyrelu", equalized_lr=False, end_with_act=True):
+        super(MLP, self).__init__()
 
-    def __init__(self, in_dim=784, h_dim=1024, feat_dim=64, leaky_relu=False, **kwargs):
-        super(MLPEncoder, self).__init__()
-        self.lin1 = nn.Linear(in_dim, h_dim)
-        self.relu = nn.ReLU(True)
-        self.lin2 = nn.Linear(h_dim, feat_dim)
-        self.out = nn.LeakyReLU(negative_slope=.2) if leaky_relu else nn.ReLU(True)
+        if layers == 1 and end_with_act:
+            self.model = nn.Sequential(
+                get_lin_layer(in_dim, out_dim, equalized_lr=equalized_lr),
+                get_act(act_type))
+        elif layers == 1 and not end_with_act:
+            self.model = get_lin_layer(in_dim, out_dim,
+                equalized_lr=equalized_lr)
+        elif layers > 1:
+            layer1 = get_lin_layer(in_dim, h_dim, equalized_lr=equalized_lr)
+            mid_layers = [get_lin_layer(h_dim, h_dim, equalized_lr=equalized_lr)
+                for _ in range(layers - 2)]
+            layerN = get_lin_layer(h_dim, out_dim, equalized_lr=equalized_lr)
+            linear_layers = [layer1] + mid_layers + [layerN]
+
+            layers = []
+            for idx,l in enumerate(linear_layers):
+                layers.append(l)
+                if end_with_act:
+                    layers.append(get_act(act_type))
+                elif not end_with_act and idx < len(linear_layers) - 1:
+                    layers.append(get_act(act_type))
+                else:
+                    continue
+            
+            self.model = nn.Sequential(*layers)
         
+        self.in_dim = in_dim
+        self.out_dim = out_dim
+        self.h_dim = h_dim
+                
+    def forward(self, x): return self.model(x)
+
+class MLPEncoder(MLP):
+
+    def __init__(self, in_dim=784, h_dim=1024, feat_dim=64, leaky_relu=False, num_encoder_layers=2, **kwargs):
+        super(MLPEncoder, self).__init__(in_dim=in_dim,
+            h_dim=h_dim,
+            out_dim=feat_dim,
+            layers=num_encoder_layers,
+            act_type="leakyrelu" if leaky_relu else "relu")
         self.feat_dim = feat_dim
     
-    def forward(self, x):
-        x = torch.flatten(x, start_dim=1)
-        fx = self.lin1(x)
-        fx = self.relu(fx)
-        fx = self.lin2(fx)
-        fx = self.out(fx)
-        return fx
+    def forward(self, x): return self.model(torch.flatten(x, start_dim=1))
 
-class MLPDecoder(nn.Module):
+class MLPDecoder(MLP):
 
-    def __init__(self, feat_dim=64, h_dim=1024, out_dim=784, **kwargs):
-        super(MLPDecoder, self).__init__()
-        self.lin1 = nn.Linear(feat_dim, h_dim)
-        self.relu = nn.ReLU(True)
-        self.lin2 = nn.Linear(h_dim, out_dim)
+    def __init__(self, feat_dim=64, h_dim=1024, out_dim=784, num_decoder_layers=2, **kwargs):
+        super(MLPDecoder, self).__init__(in_dim=feat_dim,
+            h_dim=h_dim,
+            out_dim=out_dim,
+            layers=num_decoder_layers,
+            act_type="relu",
+            end_with_act=False)
 
-    def forward(self, x):
-        fx = self.lin1(x)
-        fx = self.relu(fx)
-        fx = self.lin2(fx)
-        return fx
+    def forward(self, x): return self.model(x)
 
 class DAE_MLP(nn.Module):
 
@@ -60,9 +86,7 @@ class DAE_MLP(nn.Module):
         self.encoder = MLPEncoder(**vars(args))
         self.decoder = MLPDecoder(**vars(args))
     
-    def forward(self, x):
-        in_shape = x.shape
-        return self.decoder(self.encoder(x)).view(*in_shape)
+    def forward(self, x): return self.decoder(self.encoder(x)).view(*x.shape)
 
 
 class IMLE_DAE_MLP(nn.Module):
@@ -94,14 +118,11 @@ class IMLE_DAE_MLP(nn.Module):
             return z
     
     def forward(self, x, z=None, num_z=1, seed=None):
-        in_shape = x.shape[1:]
         if z is None:
             z = self.get_codes(len(x) * num_z, device=x.device, seed=seed)
 
-        fx = self.encoder(x)
-        fx = self.ada_in(fx, z)
-        fx = self.decoder(fx)
-        return fx.view(len(z), *in_shape)
+        fx = self.decoder(self.ada_in(self.encoder(x), z))
+        return fx.view(len(z), * x.shape[1:])
 
     def to_encoder_with_ada_in(self, use_mean_representation=False):
         return EncoderWithAdaIn(self.encoder, self.ada_in,
@@ -112,18 +133,6 @@ class IMLE_DAE_MLP(nn.Module):
             ignore_latents=True)
         ignore_latent_imle_dae_mlp.load_state_dict(self.state_dict(), strict=False)
         return ignore_latent_imle_dae_mlp
-
-class IMLE_DAE_Linear(IMLE_DAE_MLP):
-
-    def __init__(self, *args, **kwargs):
-        super(IMLE_DAE_Linear, self).__init__(*args, **kwargs)
-        self.encoder = nn.Sequential(OrderedDict([
-            ("flatten",nn.Flatten()),
-            ("lin1", nn.Linear(784, self.feat_dim))]))
-        self.encoder.feat_dim = self.feat_dim
-
-        self.decoder = nn.Sequential(OrderedDict([
-            ("lin1", nn.Linear(self.feat_dim, 784))]))
 
 def get_codes(bs, code_dim, device="cpu", seed=None):
     """Returns [bs] latent codes to be passed into the model.
@@ -281,6 +290,8 @@ def get_act(act_type):
         return nn.GELU()
     elif act_type == "leakyrelu":
         return nn.LeakyReLU(negative_slope=.2)
+    elif act_type == "relu":
+        return nn.ReLU(True)
     else:
         raise NotImplementedError(f"Unknown activation '{act_type}'")
 
@@ -335,40 +346,3 @@ class EqualizedLinear(nn.Module):
     def forward(self, x):
         bias = self.bias * self.b_mul if self.bias is not None else self.bias
         return nn.functional.linear(x, self.weight * self.w_mul, bias)
-
-class MLP(nn.Module):
-    def __init__(self, in_dim, h_dim=256, out_dim=42, layers=4, 
-        act_type="leakyrelu", equalized_lr=True, end_with_act=True):
-        super(MLP, self).__init__()
-
-        if layers == 1 and end_with_act:
-            self.model = nn.Sequential(
-                get_lin_layer(in_dim, out_dim, equalized_lr=equalized_lr),
-                get_act(act_type))
-        elif layers == 1 and not end_with_act:
-            self.model = get_lin_layer(in_dim, out_dim,
-                equalized_lr=equalized_lr)
-        elif layers > 1:
-            layer1 = get_lin_layer(in_dim, h_dim, equalized_lr=equalized_lr)
-            mid_layers = [get_lin_layer(h_dim, h_dim, equalized_lr=equalized_lr)
-                for _ in range(layers - 2)]
-            layerN = get_lin_layer(h_dim, out_dim, equalized_lr=equalized_lr)
-            linear_layers = [layer1] + mid_layers + [layerN]
-
-            layers = []
-            for idx,l in enumerate(linear_layers):
-                layers.append(l)
-                if end_with_act:
-                    layers.append(get_act(act_type))
-                elif not end_with_act and idx < len(linear_layers) - 1:
-                    layers.append(get_act(act_type))
-                else:
-                    continue
-            
-            self.model = nn.Sequential(*layers)
-        
-        self.in_dim = in_dim
-        self.out_dim = out_dim
-        self.h_dim = h_dim
-                
-    def forward(self, x): return self.model(x)

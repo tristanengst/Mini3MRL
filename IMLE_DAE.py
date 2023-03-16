@@ -48,8 +48,6 @@ def evaluate(model, data_tr, data_val, scheduler, args, cur_step, nxz_data_tr=No
     nxz_data_tr -- ImageLatentDataset over the training data, or None to create
                     it on the fly from [data_tr]
     """
-    
-
     # Get ImageLatentDatasets as needed
     if nxz_data_tr is None:
         nxz_data_tr = ImageLatentDataset.get_image_latent_dataset(
@@ -71,14 +69,18 @@ def evaluate(model, data_tr, data_val, scheduler, args, cur_step, nxz_data_tr=No
     embeds_no_noise_tr, targets_no_noise_tr = ImageLatentDataset.generate_embeddings(nxz_data_tr, model, args, mode="no_noise")
     embeds_no_noise_val, targets_no_noise_val = ImageLatentDataset.generate_embeddings(nxz_data_val, model, args, mode="no_noise")
 
-    embedding_results = {
-        "embeds/post_fuse_vis/tr": wandb.Image(Utils.embeddings_to_pil_image(embeds_post_fuse_tr, targets_post_fuse_tr)),
-        "embeds/post_fuse_vis/val": wandb.Image(Utils.embeddings_to_pil_image(embeds_post_fuse_val, targets_post_fuse_val)),
-        "embeds/pre_fuse_vis/tr": wandb.Image(Utils.embeddings_to_pil_image(embeds_pre_fuse_tr, targets_pre_fuse_tr)),
-        "embeds/pre_fuse_vis/val": wandb.Image(Utils.embeddings_to_pil_image(embeds_pre_fuse_val, targets_pre_fuse_val)),
-        "embeds/no_noise_vis/tr": wandb.Image(Utils.embeddings_to_pil_image(embeds_no_noise_tr, targets_no_noise_tr)),
-        "embeds/no_noise_vis/val": wandb.Image(Utils.embeddings_to_pil_image(embeds_no_noise_val, targets_no_noise_val)),
+    if args.feat_dim < 3:
+        embedding_visualization = {
+            "embeds/post_fuse_vis/tr": wandb.Image(Utils.embeddings_to_pil_image(embeds_post_fuse_tr, targets_post_fuse_tr)),
+            "embeds/post_fuse_vis/val": wandb.Image(Utils.embeddings_to_pil_image(embeds_post_fuse_val, targets_post_fuse_val)),
+            "embeds/pre_fuse_vis/tr": wandb.Image(Utils.embeddings_to_pil_image(embeds_pre_fuse_tr, targets_pre_fuse_tr)),
+            "embeds/pre_fuse_vis/val": wandb.Image(Utils.embeddings_to_pil_image(embeds_pre_fuse_val, targets_pre_fuse_val)),
+            "embeds/no_noise_vis/tr": wandb.Image(Utils.embeddings_to_pil_image(embeds_no_noise_tr, targets_no_noise_tr)),
+            "embeds/no_noise_vis/val": wandb.Image(Utils.embeddings_to_pil_image(embeds_no_noise_val, targets_no_noise_val))}
+    else:
+        embedding_visualization = {}
 
+    embedding_results = {
         "embeds/post_fuse_mean/tr": torch.mean(embeds_post_fuse_tr),
         "embeds/post_fuse_mean/val": torch.mean(embeds_post_fuse_val),
         "embeds/pre_fuse_mean/tr": torch.mean(embeds_pre_fuse_tr),
@@ -149,23 +151,10 @@ def evaluate(model, data_tr, data_val, scheduler, args, cur_step, nxz_data_tr=No
     if epoch % args.probe_iter == 0 or epoch == -1 or epoch == args.epochs - 1:
         probe_results = LinearProbe.probe(model, loader_tr, loader_val, args)
     else:
-        tqdm.write(f"Computed epoch as {epoch}; not probing")
+        tqdm.write(f"Computed epoch as {epoch} so not probing")
         probe_results = {}
 
-    if Utils.hierararchical_hasattr(model.module, ["decoder", "lin1", "weight"]):
-        decoder_weight_one_stats = Utils.matrix_to_stats(model.module.decoder.lin1.weight, "decoder_layer_zero_weight")
-    else:
-        decoder_weight_one_stats = {}
-    if Utils.hierararchical_hasattr(model.module, ["encoder", "lin1", "weight"]):
-        encoder_weight_one_stats = Utils.matrix_to_stats(model.module.encoder.lin1.weight, "encoder_layer_zero_weight")
-    else:
-        encoder_weight_one_stats = {}
-    if Utils.hierararchical_hasattr(model.module, ["encoder", "lin2", "weight"]):
-        encoder_weight_two_stats = Utils.matrix_to_stats(model.module.encoder.lin2.weight, "encoder_layer_one_weight")
-    else:
-        encoder_weight_two_stats = {}
-
-    wandb.log(probe_results | embedding_results | z_results | decoder_weight_one_stats | encoder_weight_one_stats | encoder_weight_two_stats | {
+    wandb.log(probe_results | embedding_results | embedding_visualization | z_results | {
         "loss/min/tr": loss_tr_min,
         "loss/min/val": loss_val_min,
         "loss/mean/tr": loss_tr_mean,
@@ -334,105 +323,6 @@ class ImageLatentDataset(Dataset):
         return loss.item() / total
 
     @staticmethod
-    def get_and_eval_image_latent_dataset(model, loss_fn, dataset, args):
-        """Returns an ImageLatentDataset giving noised images and codes for
-        [model] to use in IMLE training. 
-
-        Args:
-        model   -- IMLE model
-        loss_fn -- distance function that returns a BSx... tensor of distances
-                    given BSx... inputs. Typically, this means 'reduction' must
-                    be 'none'
-        dataset -- dataset of non-noised images to get codes for
-        args    -- argparse Namespace
-        """
-        with torch.no_grad():
-            least_losses = torch.ones(len(dataset), device=device) * float("inf")
-            best_latents = Utils.de_dataparallel(model).get_codes(len(dataset), device=device)
-            images = []
-            noised_images = []
-
-            all_losses = torch.ones(len(dataset), args.ns) * float("inf")
-            all_outputs = torch.zeros(len(dataset), args.ns, *dataset[0][0].shape)
-            all_latents = torch.zeros(len(dataset), args.ns, args.latent_dim)
-
-            loader = DataLoader(dataset,
-                batch_size=args.code_bs,
-                num_workers=args.num_workers,
-                shuffle=False,
-                pin_memory=True)
-
-            for idx,(x,_) in tqdm(enumerate(loader),
-                desc="Sampling outer loop",
-                total=len(loader),
-                leave=False,
-                dynamic_ncols=True):
-
-                start_idx = idx * args.code_bs
-                stop_idx = min(start_idx + args.code_bs, len(dataset))
-                x = x.to(device, non_blocking=True)
-                xn = Utils.with_noise(x, std=args.std)
-                
-                # Sanity check for IMLE. This should force the model to learn to
-                # drop either the top of bottom of images it generates.
-                if args.zero_half_target:
-                    drop_top_idxs = torch.rand(len(x)) < .5
-                    drop_bottom_idxs = ~drop_top_idxs
-                    x[drop_top_idxs, :, :14, :] = 0
-                    x[drop_bottom_idxs, :, 14:, :] = 0
-
-                for sample_idx in tqdm(range(args.ns),
-                    desc="Sampling inner loop",
-                    leave=False,
-                    dynamic_ncols=True):
-
-                    z = Utils.de_dataparallel(model).get_codes(len(xn), device=xn.device)
-                    fxn = model(xn, z)
-                    losses = loss_fn(fxn, x)
-                    losses = torch.sum(losses.view(len(x), -1), dim=1)
-
-                    change_idxs = (losses < least_losses[start_idx:stop_idx])
-                    least_losses[start_idx:stop_idx][change_idxs] = losses[change_idxs]
-                    best_latents[start_idx:stop_idx][change_idxs] = z[change_idxs]
-
-                    all_losses[start_idx:stop_idx, sample_idx] = losses.cpu()
-                    all_outputs[start_idx:stop_idx, sample_idx] = fxn.cpu()
-                    all_latents[start_idx:stop_idx, sample_idx] = z.cpu()
-
-                noised_images.append(xn.cpu())
-                images.append(x.cpu())
-
-        noised_images = torch.cat(noised_images, dim=0)
-        images = torch.cat(images, dim=0)
-
-        p = Models.PixelNormLayer()
-
-        tqdm.write(f"ALL LATENTS\n{all_latents}")
-        tqdm.write(f"ALL LATENTS NORMS {torch.linalg.norm(all_latents, dim=-1)}")
-
-        all_z = model.module.ada_in.model(all_latents.reshape(len(x) * args.ns, -1).to(device)).view(len(x), args.ns, -1)
-        all_z[:, :, :args.feat_dim] = all_z[:, :, :args.feat_dim] - model.module.ada_in.z_shift_mean
-        all_z[:, :, args.feat_dim:] = all_z[:, :, args.feat_dim:] - model.module.ada_in.z_scale_mean
-        all_z_norm = torch.linalg.norm(all_z, dim=-1)
-
-        all_z = all_z.view(len(x), args.ns, -1).cpu()
-
-        tqdm.write(f"ALL Z MAPPED NORM {all_z_norm}")
-
-        tqdm.write(f"ALL LOSSES\n{all_losses}")
-        tqdm.write(f"LEAST LOSSES\n{least_losses}")
-
-        best_outputs = model(noised_images, best_latents).cpu()
-
-        all_outputs = torch.cat([images.unsqueeze(1),
-            best_outputs.unsqueeze(1),
-            all_outputs], dim=1)
-
-        all_outputs = Utils.images_to_pil_image(all_outputs)
-        all_outputs.save("IMLE-SSL_debugging_output.png")
-        
-
-    @staticmethod
     def get_image_latent_dataset(model, loss_fn, dataset, args):
         """Returns an ImageLatentDataset giving noised images and codes for
         [model] to use in IMLE training. 
@@ -525,7 +415,7 @@ if __name__ == "__main__":
         model = Models.get_model(args, imle=True)
         model = nn.DataParallel(model, device_ids=args.gpus).to(device)
         optimizer = torch.optim.Adam(model.parameters(), lr=1,
-            weight_decay=1e-5)
+            weight_decay=args.wd)
         last_epoch = -1
     else:
         states = torch.load(args.resume)
@@ -535,53 +425,28 @@ if __name__ == "__main__":
         model.load_state_dict(states["model"], strict=False)
         model = nn.DataParallel(model, device_ids=args.gpus).to(device)
         optimizer = torch.optim.Adam(model.parameters(), lr=1,
-            weight_decay=1e-5)
+            weight_decay=args.wd)
         optimizer.load_state_dict(states["optimizer"])
         model = model.to(device)
         last_epoch = states["epoch"]
 
     wandb.init(anonymous="allow", id=args.uid, config=args,
         mode=args.wandb, project="Mini3MRL", entity="apex-lab",
-        name=os.path.basename(imle_model_folder(args)))
-
-    tqdm.write(f"MODEL\n{model.module}")
+        name=os.path.basename(imle_model_folder(args)),
+        settings=wandb.Settings(code_dir=os.path.dirname(__file__)))
     
-    scheduler = Utils.StepScheduler(optimizer, args.lrs)
+    scheduler = Utils.StepScheduler(optimizer, args.lrs, last_epoch=last_epoch)
     loss_fn = nn.BCEWithLogitsLoss()
-
     data_tr, data_val = Data.get_data_from_args(args)
 
-    if args.debug == 1:
-        _ = ImageLatentDataset.get_and_eval_image_latent_dataset(model=model,
-            loss_fn=nn.BCEWithLogitsLoss(reduction="none"),
-            dataset=data_tr,
-            args=args)
-        sys.exit(0)
-    elif args.debug == 2:
-        for idx in range(0, 15, 2):
-            w = model.module.ada_in.model.mapping_net.model[idx].weight
-            stats = Utils.matrix_to_stats(w, matrix_name=str(idx))
-            for k,v in stats.items():
-                tqdm.write(f"---------------------------------------\n{k}\n{v}")
+    tqdm.write(f"---ARGS---\n{Utils.sorted_namespace(args)}\n----------")
+    tqdm.write(f"---MODEL---\n{model.module}")
+    tqdm.write(f"---OPTIMIZER---\n{optimizer}")
+    tqdm.write(f"---SCHEDULER---\n{scheduler}")
+    tqdm.write(f"---TRAINING DATA---\n{data_tr}")
 
-        tqdm.write("===========================================================")
-
-        stats = Utils.matrix_to_stats(model.module.decoder.lin1.weight, "decoder_layer_zero_weight")
-        for k,v in stats.items():
-            tqdm.write(f"---------------------------------------\n{k}\n{v}")
-        stats = Utils.matrix_to_stats(model.module.encoder.lin1.weight, "encoder_layer_zero_weight")
-        for k,v in stats.items():
-            tqdm.write(f"---------------------------------------\n{k}\n{v}")
-        stats = Utils.matrix_to_stats(model.module.encoder.lin2.weight, "encoder_layer_one_weight")
-        for k,v in stats.items():
-            tqdm.write(f"---------------------------------------\n{k}\n{v}")
-        sys.exit(0)        
-        
-    tqdm.write(f"TRAINING DATA\n{data_tr}")
-    tqdm.write(f"VALIDATION DATA\n{data_val}")
-    
-    tqdm.write(f"-------\n{Utils.sorted_namespace(args)}\n-------")
-    tqdm.write(f"Will save to {imle_model_folder(args)}")
+    if not args.save_iter == 0:
+        _ = Utils.save_code_under_folder(imle_model_folder(args))
 
     cur_step = (last_epoch + 1) * args.ipe * len(data_tr) // args.bs
     num_steps = args.ipe * len(data_tr) // args.bs
@@ -630,7 +495,7 @@ if __name__ == "__main__":
                 nxz_data_tr=epoch_dataset)
         
         if ((not args.save_iter == 0 and epoch % args.save_iter == 0)
-            or epoch in args.save_epochs):
+            or epoch in args.save_epochs or epoch == args.epochs -1):
             _ = Utils.save_state(model, optimizer,
                 args=args,
                 epoch=epoch,
