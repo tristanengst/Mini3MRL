@@ -82,7 +82,7 @@ def parser_with_training_args(P):
         help="Use LeakyReLU instead of ReLU")
     P.add_argument("--lrs", default=[0, 1e-5], type=float, nargs="*",
         help="Learning rates. Even indices give step indices, odd indices give the learning rate to start at the step given at the prior index.")
-    P.add_argument("--epochs",type=int, default=5000,
+    P.add_argument("--epochs",type=int, default=500,
         help="Number of epochs/samplings")
     P.add_argument("--bs",type=int, default=1000,
         help="Batch size")
