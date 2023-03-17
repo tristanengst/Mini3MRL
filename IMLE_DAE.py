@@ -3,6 +3,7 @@ import os
 import itertools
 import numpy as np
 import sys
+import time
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset, Subset
@@ -119,8 +120,8 @@ def evaluate(model, data_tr, data_val, scheduler, args, cur_step, nxz_data_tr=No
     }
     
     # Generate images
-    images_tr = ImageLatentDataset.generate_images(nxz_data_tr, model, args)
-    images_val = ImageLatentDataset.generate_images(nxz_data_val, model, args)
+    images_tr = ImageLatentDataset.generate_images(nxz_data_tr, model, args, noise_seed="dataset")
+    images_val = ImageLatentDataset.generate_images(nxz_data_val, model, args, noise_seed="dataset")
     if args.save_iter > 0:
         image_save_folder = f"{imle_model_folder(args, make_folder=True)}/images"
         Utils.conditional_make_folder(image_save_folder)
@@ -232,7 +233,7 @@ class ImageLatentDataset(Dataset):
         return embeddings, targets
         
     @staticmethod
-    def generate_images(nxz_data, model, args, idxs=None, num_images=None, num_samples=None, seed=None, use_sampled_codes=False):
+    def generate_images(nxz_data, model, args, idxs=None, num_images=None, num_samples=None, noise_seed=None, latents_seed=None, idxs_seed=None):
         """Returns a PIL image from running [model] on [nxz_data]. Each row in
         the image contains:
         (1) a target image
@@ -242,25 +243,33 @@ class ImageLatentDataset(Dataset):
         (4) images given by [model] run on the noised image with random latents
         
         Args:
-        nxz_data    -- ImageLatentDataset containing images
-        model       -- model to generate images with
-        args        -- argparse Namespace with relevant parameters. Its
-                        NUM_EVAL_IMAGES, NUM_EVAL_SAMPLES, SEED are overriden by
-                        other arguments to this function when they are not None
-        idxs        -- indices to [image_latent_data] to use
-        num_images  -- number of images to use. Overriden by [idxs]
-        num_samples -- number of samples to generate per image
-        seed        -- seed to use for latent codes 
+        nxz_data        -- ImageLatentDataset containing images
+        model           -- model to generate images with
+        args            -- argparse Namespace with relevant parameters. Its
+                            NUM_EVAL_IMAGES, NUM_EVAL_SAMPLES, SEED are overriden by
+                            other arguments to this function when they are not None
+        idxs            -- indices to [image_latent_data] to use
+        num_images      -- number of images to use. Overriden by [idxs], overrides args.num_eval_images if specified
+        num_samples     -- number of samples to generate per image, overrides args.num_eval_samples if specified
+        noise_seed      -- seed used in sampling image noise if specified, or
+                            "dataset" to use the noise in [nxz_data]. Regardless
+                            of its value, the noise used in [nxz_data] is used
+                            when logging the result of the best latent
+        latents_seed    -- seed used in sampling latent codes if specified
+        idxs_seed       -- seed used in sampling indices if specified
         """
-        if idxs is None and num_images is None:
-            idxs = Utils.sample(range(len(nxz_data)), k=args.num_eval_images)
-        elif idxs is None and not num_images is None:
-            idxs = Utils.sample(range(len(nxz_data)), k=num_images)
+        noise_seed = args.eval_noise_seed if noise_seed is None else noise_seed
+        latents_seed = args.eval_latents_seed if latents_seed is None else latents_seed
+        idxs_seed = args.eval_idxs_seed if idxs_seed is None else idxs_seed
+
+        num_images = args.num_eval_images if num_images is None else num_images
+        num_samples = args.num_eval_samples if num_samples is None else num_samples
+
+        if idxs is None:
+            idxs = Utils.sample(range(len(nxz_data)), k=num_images, seed=idxs_seed)
         else:
             idxs = idxs
         
-        num_samples = args.num_eval_samples if num_samples is None else num_samples
-
         data = Subset(nxz_data, indices=idxs)
         gen_images_batch_size = max(1, args.code_bs // num_samples)
         loader = DataLoader(data,
@@ -282,7 +291,11 @@ class ImageLatentDataset(Dataset):
                 output[start_idx:stop_idx, 0] = x
                 output[start_idx:stop_idx, 1] = nx
                 output[start_idx:stop_idx, 2] = model(nx, z).cpu()
-                output[start_idx:stop_idx, 3:] = model(nx, num_z=num_samples, seed=args.seed).view(len(data), num_samples, *nxz_data[0][2].shape).cpu()
+
+                if not noise_seed == "dataset":
+                    nx = Utils.with_noise(x, std=args.std, seed=noise_seed)
+                
+                output[start_idx:stop_idx, 3:] = model(nx, num_z=num_samples, seed=latents_seed).view(len(data), num_samples, *nxz_data[0][2].shape).cpu()
 
         return Utils.images_to_pil_image(output)
 
@@ -493,15 +506,21 @@ if __name__ == "__main__":
         if epoch % args.eval_iter == 0 or epoch == args.epochs - 1:
             _ = evaluate(model, data_tr, data_val, scheduler, args, cur_step,
                 nxz_data_tr=epoch_dataset)
-        
+
         if ((not args.save_iter == 0 and epoch % args.save_iter == 0)
             or epoch in args.save_epochs or epoch == args.epochs -1):
             _ = Utils.save_state(model, optimizer,
                 args=args,
                 epoch=epoch,
                 folder=imle_model_folder(args))
-        elif args.save_iter == -1:
+        elif args.save_iter == -1 or ():
             raise NotImplementedError()
-    
+        elif args.save_iter == -2 and time.time() - wandb.run.start_time > 1800:
+            _ = Utils.save_state(model, optimizer,
+                args=args,
+                epoch=epoch,
+                folder=imle_model_folder(args),
+                delete_prior_state=True)
+
         scheduler.step(epoch)
         

@@ -72,7 +72,7 @@ def save_code_under_folder(folder):
     with open(f"{folder}/all_code.txt", "w+") as f:
         f.write(file_for_diffs)
 
-def save_state(model, optimizer, args, epoch, folder):
+def save_state(model, optimizer, args, epoch, folder, delete_prior_state=False):
     """Saves [model], [optimizer], [args], and [epoch] along with Python, NumPy,
     and PyTorch random seeds to 'folder/epoch.pt'.
 
@@ -82,6 +82,7 @@ def save_state(model, optimizer, args, epoch, folder):
     args        -- argparse Namespace used to create run
     epoch       -- epoch number to save with
     folder      -- folder inside which to save everything
+    delete_prior_state  -- remove prior saves
     """
     state_dict = {"model": de_dataparallel(model).cpu().state_dict(),
         "optimizer": optimizer.state_dict(),
@@ -94,6 +95,13 @@ def save_state(model, optimizer, args, epoch, folder):
         }
     }
     _ = conditional_make_folder(folder)
+    if delete_prior_state:
+        to_delete = [f for f in os.listdir(folder) if f.endswith(".pt")]
+        to_delete = [t for t in to_delete
+            if not int(os.splitext(t)[0]) in args.save_epochs]
+        for t in to_delete:
+            os.remove(f"{folder}/{t}")
+
     torch.save(state_dict, f"{folder}/{epoch}.pt")
     model.to(device if torch.cuda.is_available() else "cpu")
 
@@ -103,7 +111,7 @@ def set_seed(seed):
         random.seed(seed)
         np.random.seed(seed)
         torch.manual_seed(seed)
-        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
         tqdm.write(f"Set the NumPy, PyTorch, and Random modules seeds to {seed}")
     elif isinstance(seed, dict):
         random.setstate(seed["random_seed"])
@@ -171,7 +179,7 @@ def images_to_pil_image(images):
     # We need this because we use BCEWithLogitsLoss and don't put nn.Sigmoid at
     # the end of our model. This visually represents model confidence in respect
     # to loss.
-    images = torch.nn.functional.sigmoid(images)
+    images = torch.sigmoid(images)
 
     fig, axs = plt.subplots(ncols=max([len(image_row) for image_row in images]),
         nrows=len(images),

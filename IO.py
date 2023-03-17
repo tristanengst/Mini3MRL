@@ -42,8 +42,8 @@ def parser_with_logging_args(P):
         help="WandB UID. Specify only to resume an existing run.")
     P.add_argument("--eval_iter", default=1, type=int,
         help="Evaluate on the proxy task every EVAL_ITER epochs/samplings.")
-    P.add_argument("--save_iter", default=0, type=int,
-        help="Save the run every SAVE_ITER epochs/samplings.")
+    P.add_argument("--save_iter", default=-2, type=int,
+        help="Save the run every SAVE_ITER epochs/samplings. 0=no saving, -1=keep latest save after being run for half an hour")
     P.add_argument("--save_epochs", nargs="*", default=[], type=int,
         help="List of epoch indices on which to necessarily save the model.")
     P.add_argument("--probe_iter", default=5, type=int,
@@ -54,6 +54,12 @@ def parser_with_logging_args(P):
         help="Number of images generate to generate from when logging images during evaluation")
     P.add_argument("--num_eval_samples", type=int, default=10,
         help="Number of latent codes per image when logging images during evaluation")
+    P.add_argument("--eval_noise_seed", type=int, default=0,
+        help="Seed for noise in logging images")
+    P.add_argument("--eval_idxs_seed", type=int, default=0,
+        help="Seed for selecting images in logging images")
+    P.add_argument("--eval_latents_seed", type=int, default=0,
+        help="Seed for latent codes in logging images")
     return P
 
 def parser_with_data_args(P):
