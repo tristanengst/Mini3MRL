@@ -168,6 +168,11 @@ def images_to_pil_image(images):
     elif len(images.shape) == 5:
         images = images
 
+    # We need this because we use BCEWithLogitsLoss and don't put nn.Sigmoid at
+    # the end of our model. This visually represents model confidence in respect
+    # to loss.
+    images = torch.nn.functional.sigmoid(images)
+
     fig, axs = plt.subplots(ncols=max([len(image_row) for image_row in images]),
         nrows=len(images),
         squeeze=False)

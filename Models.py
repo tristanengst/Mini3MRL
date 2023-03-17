@@ -319,6 +319,7 @@ class PixelNormLayer(nn.Module):
         self.epsilon = epsilon
 
     def forward(self, x):
+        assert len(x.shape) == 2, f"{x.shape}"
         return x * torch.rsqrt(torch.mean(x ** 2, dim=-1, keepdim=True) + self.epsilon)
 
 class EqualizedLinear(nn.Module):
