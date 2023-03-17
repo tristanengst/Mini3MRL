@@ -1,7 +1,5 @@
 import argparse
 from functools import partial
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.svm import LinearSVC
 from tqdm import tqdm
 import torch
 import torch.nn as nn
