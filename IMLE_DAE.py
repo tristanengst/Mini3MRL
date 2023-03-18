@@ -270,17 +270,18 @@ class ImageLatentDataset(Dataset):
         else:
             idxs = idxs
         
-        data = Subset(nxz_data, indices=idxs)
         gen_images_batch_size = max(1, args.code_bs // num_samples)
+        data = Subset(Data.ZipDataset(nxz_data.data, nxz_data), indices=idxs)
         loader = DataLoader(data,
             batch_size=gen_images_batch_size,
             num_workers=args.num_workers,
+            shuffle=False,
             pin_memory=True)
 
         output = torch.zeros(len(data), num_samples+3, *nxz_data[0][2].shape)
 
         with torch.no_grad():
-            for idx,(nx,z,x) in tqdm(enumerate(loader),
+            for idx,((nx,_),(nx,z,t)) in tqdm(enumerate(loader),
                 desc="Generating images from ImageLatentDataset",
                 total=len(loader),
                 leave=False,
@@ -288,7 +289,7 @@ class ImageLatentDataset(Dataset):
                 start_idx = idx * gen_images_batch_size
                 stop_idx = min(len(data), (idx+1) * gen_images_batch_size)
 
-                output[start_idx:stop_idx, 0] = x
+                output[start_idx:stop_idx, 0] = t
                 output[start_idx:stop_idx, 1] = nx
                 output[start_idx:stop_idx, 2] = model(nx, z).cpu()
 

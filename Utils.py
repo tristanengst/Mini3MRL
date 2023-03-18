@@ -98,7 +98,7 @@ def save_state(model, optimizer, args, epoch, folder, delete_prior_state=False):
     if delete_prior_state:
         to_delete = [f for f in os.listdir(folder) if f.endswith(".pt")]
         to_delete = [t for t in to_delete
-            if not int(os.splitext(t)[0]) in args.save_epochs]
+            if not int(os.splittext(t)[0]) in args.save_epochs]
         for t in to_delete:
             os.remove(f"{folder}/{t}")
 

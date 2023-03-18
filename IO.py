@@ -94,6 +94,8 @@ def parser_with_training_args(P):
         help="Number of encoder layers")
     P.add_argument("--wd", type=float, default=1e-5,
         help="Weight decay on generative task")
+    P.add_argument("--zero_half_target", choices=[0, 1], default=0, type=int,
+        help="Whether half the target (bottom or top, randomly) should be zeroed out")
     return P
 
 def parser_with_probe_args(P):
@@ -134,7 +136,5 @@ def parser_with_imle_args(P):
         help="Number of layers in AdaIN mapping network")
     P.add_argument("--latent_dim", default=512, type=int,
         help="Latent code dimensionality")
-    P.add_argument("--zero_half_target", choices=[0, 1], default=0, type=int,
-        help="Whether half the target (bottom or top, randomly) should be zeroed out")
     return P
 
