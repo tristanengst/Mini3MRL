@@ -1,6 +1,7 @@
 import argparse
 import os
 import itertools
+import math
 import numpy as np
 import sys
 import time
@@ -281,7 +282,7 @@ class ImageLatentDataset(Dataset):
         output = torch.zeros(len(data), num_samples+3, *nxz_data[0][2].shape)
 
         with torch.no_grad():
-            for idx,((nx,_),(nx,z,t)) in tqdm(enumerate(loader),
+            for idx,((x,_),(nx,z,t)) in tqdm(enumerate(loader),
                 desc="Generating images from ImageLatentDataset",
                 total=len(loader),
                 leave=False,
@@ -443,10 +444,12 @@ if __name__ == "__main__":
         optimizer.load_state_dict(states["optimizer"])
         model = model.to(device)
         last_epoch = states["epoch"]
+        args.uid = states["args"].uid if args.continue_run else args.uid
 
     wandb.init(anonymous="allow", id=args.uid, config=args,
         mode=args.wandb, project="Mini3MRL", entity="apex-lab",
         name=os.path.basename(imle_model_folder(args)),
+        resume="allow" if args.continue_run else "never",
         settings=wandb.Settings(code_dir=os.path.dirname(__file__)))
     
     scheduler = Utils.StepScheduler(optimizer, args.lrs, last_epoch=last_epoch)
@@ -462,8 +465,8 @@ if __name__ == "__main__":
     if not args.save_iter == 0:
         _ = Utils.save_code_under_folder(imle_model_folder(args))
 
-    cur_step = (last_epoch + 1) * args.ipe * len(data_tr) // args.bs
-    num_steps = args.ipe * len(data_tr) // args.bs
+    cur_step = (last_epoch + 1) * args.ipe * math.ceil(len(data_tr) / args.bs)
+    num_steps = args.ipe * math.ceil(len(data_tr) / args.bs)
     _ = evaluate(model, data_tr, data_val, scheduler, args, cur_step)
     for epoch in tqdm(range(last_epoch + 1, args.epochs),
         dynamic_ncols=True,

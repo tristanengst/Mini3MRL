@@ -31,6 +31,8 @@ def parser_with_default_args(P):
         help="List of GPU IDs")
     P.add_argument("--resume", type=str, default=None,
         help="Path to file to resume from")
+    P.add_argument("--continue_run", choices=[0, 1], type=int, default=0,
+        help="Whether to continue logging to the save run as in RESUME")
     return P
 
 def parser_with_logging_args(P):

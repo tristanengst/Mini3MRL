@@ -59,7 +59,7 @@ def save_code_under_folder(folder):
     to be siblings of the current file.
     """
     code_folder = f"{folder}/code"
-    os.makedirs(code_folder)
+    _ = conditional_make_folder(code_folder)
     files = sorted([f for f in os.listdir(os.path.dirname(__file__))
         if f.endswith(".py")])
     file_for_diffs = ""
