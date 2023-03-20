@@ -58,6 +58,8 @@ def get_slurm_args():
         help="GPU type")
     P.add_argument("--mem", default="100G",
         help="RAM—specify SLURM argument '100G'")
+    P.add_argument("--force_wandb_offline", choices=[0, 1], type=int, default=1,
+        help="Force WandB offline")
     return P.parse_known_args()
 
 if __name__ == "__main__":
@@ -80,7 +82,7 @@ if __name__ == "__main__":
     else:
         raise NotImplementedError()
 
-    script = f"{file_move_command}\npython {slurm_args.script} {unparse_args(args)} --job_id $SLURM_JOB_ID --num_workers {num_cpus} --wandb offline"
+    script = f"{file_move_command}\npython {slurm_args.script} {unparse_args(args)} --job_id $SLURM_JOB_ID --num_workers {num_cpus}{'--wandb offline' if args.force_wandb_offline else ''}"
 
     if slurm_args.env == "conda":
         env_str = "conda activate py3103MRL"

@@ -511,20 +511,16 @@ if __name__ == "__main__":
             _ = evaluate(model, data_tr, data_val, scheduler, args, cur_step,
                 nxz_data_tr=epoch_dataset)
 
-        if ((not args.save_iter == 0 and epoch % args.save_iter == 0)
-            or epoch in args.save_epochs or epoch == args.epochs -1):
-            _ = Utils.save_state(model, optimizer,
-                args=args,
-                epoch=epoch,
+        if args.save_iter == 0:
+            pass
+        elif (args.save_iter > 0 and (epoch % args.save_iter == 0
+                or epoch in args.save_epochs or epoch == args.epochs -1)):
+            _ = Utils.save_state(model, optimizer, args=args, epoch=epoch,
                 folder=imle_model_folder(args))
-        elif args.save_iter == -1 or ():
-            raise NotImplementedError()
-        elif args.save_iter == -2 and time.time() - wandb.run.start_time > 1800:
-            _ = Utils.save_state(model, optimizer,
-                args=args,
-                epoch=epoch,
+        elif args.save_iter == -1 or args.save_iter > 0:
+            _ = Utils.save_state(model, optimizer, args=args, epoch=epoch,
                 folder=imle_model_folder(args),
-                delete_prior_state=True)
+                save_latest=True)
 
         scheduler.step(epoch)
         

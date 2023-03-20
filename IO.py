@@ -44,8 +44,8 @@ def parser_with_logging_args(P):
         help="WandB UID. Specify only to resume an existing run.")
     P.add_argument("--eval_iter", default=1, type=int,
         help="Evaluate on the proxy task every EVAL_ITER epochs/samplings.")
-    P.add_argument("--save_iter", default=-2, type=int,
-        help="Save the run every SAVE_ITER epochs/samplings. 0=no saving, -1=keep latest save after being run for half an hour")
+    P.add_argument("--save_iter", default=-1, type=int,
+        help="Save the run every SAVE_ITER epochs/samplings. 0=no saving, -1=keeps latest checkpoint")
     P.add_argument("--save_epochs", nargs="*", default=[], type=int,
         help="List of epoch indices on which to necessarily save the model.")
     P.add_argument("--probe_iter", default=5, type=int,
