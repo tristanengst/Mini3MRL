@@ -1,8 +1,6 @@
 # Mini Masked Multi-Modal Representation Learning
 Code for the toy example.
 
-Some of what's here is taken from [this repo](https://github.com/ReyhaneAskari/pytorch_experiments/blob/master/DAE.py). Many thanks!
-
 ## Setup
 In a conda environment:
 ```
