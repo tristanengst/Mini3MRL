@@ -7,6 +7,7 @@ from torchvision.datasets import MNIST, CIFAR10
 import torchvision.transforms as transforms
 from tqdm import tqdm
 import Utils
+import torch.nn as nn
 
 def get_data_from_args(args):
     """Returns a (data_tr, data_val) tuple given argparse Namespace [args]."""
@@ -35,9 +36,9 @@ def get_data_from_args(args):
         data_val = ImageFolderSubset.complement(data_tr, replace_transform=get_transforms_te(args))
     else:
         data_tr = get_dataset(args.data_tr, split="train", transform=get_transforms_tr(args))
-        # data_tr = get_fewshot_dataset(data_tr, n_way=args.n_way, n_shot=args.n_shot, seed=args.seed)
+        data_tr = get_fewshot_dataset(data_tr, n_way=args.n_way, n_shot=args.n_shot, seed=args.seed)
         data_val = get_dataset(args.data_val, split="test", transform=get_transforms_te(args))
-        # data_val = get_fewshot_dataset(data_val, n_way=args.n_way, n_shot=args.n_shot, seed=args.seed)
+        data_val = get_fewshot_dataset(data_val, n_way=args.n_way, n_shot=args.n_shot, seed=args.seed)
     
     return data_tr, data_val
 
@@ -64,7 +65,8 @@ def get_transforms_tr(args):
     if args.data_tr == "mnist":
         return transforms.Compose([
             transforms.Lambda(lambda x: min_max_normalization(x, 0, 1)),
-            transforms.Lambda(lambda x: torch.round(x))
+            transforms.Lambda(lambda x: torch.round(x)),
+            TwoDToThreeDTransform()
         ])
     else:
         raise NotImplementedError()
@@ -73,10 +75,17 @@ def get_transforms_te(args):
     if args.data_tr == "mnist":
         return transforms.Compose([
             transforms.Lambda(lambda x: min_max_normalization(x, 0, 1)),
-            transforms.Lambda(lambda x: torch.round(x))
+            transforms.Lambda(lambda x: torch.round(x)),
+            TwoDToThreeDTransform()
         ])
     else:
         raise NotImplementedError()
+
+class TwoDToThreeDTransform(nn.Module):
+    def __init__(self): super(TwoDToThreeDTransform, self).__init__()
+    def forward(self, x):
+        assert len(x.shape) == 2
+        return x.unsqueeze(0)
         
 
 
@@ -183,6 +192,7 @@ class ImageFolderSubset(Dataset):
         # correct [class_to_idx] for the subset.
         self.target2idx = {int(t): idx for idx,t in enumerate(sorted(superset_target_set))}
         self.class2idx = {c: self.target2idx[t] for c,t in superset_class2idx.items()}
+        self.class_to_idx = self.class2idx
 
         self.classes = list(superset_class2idx.keys())
         self.root = data.root

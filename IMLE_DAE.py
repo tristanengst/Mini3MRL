@@ -27,7 +27,7 @@ def imle_model_folder(args, make_folder=False):
     suffix = "" if args.suffix is None else f"-{args.suffix}"
     job_id = "" if args.job_id is None else f"-{args.job_id}"
     lrs = "_".join([f"{lr:.2e}" for idx,lr in enumerate(args.lrs) if idx % 2 == 1])
-    folder = f"{args.save_folder}/models_{args.script}/{args.script}-{data_str}-bs{args.bs}-epochs{args.epochs}-feat_dim{args.feat_dim}-ipe{args.ipe}-leakyrelu{args.leaky_relu}-lr{lrs}-ns{args.ns}-nshot{args.n_way}-nway{args.n_shot}-seed{args.seed}-{args.uid}{job_id}{suffix}"
+    folder = f"{args.save_folder}/models_{args.script}/{args.script}-{data_str}-bs{args.bs}-epochs{args.epochs}-feat_dim{args.feat_dim}-ipe{args.ipe}-leakyrelu{args.leaky_relu}-lr{lrs}-ns{args.ns}-nshot{args.n_shot}-nway{args.n_way}-seed{args.seed}-{args.uid}{job_id}{suffix}"
 
     if make_folder:
         Utils.conditional_make_folder(folder)
@@ -198,7 +198,9 @@ class ImageLatentDataset(Dataset):
         Args:
         post_fuse   -- get embeddings after or before fusing them with codes
         """
-        idxs = Utils.sample(range(len(nxz_data)), k=k, seed=args.seed)
+        idxs = Utils.sample(range(len(nxz_data)),
+            k=min(args.bs, len(nxz_data)),
+            seed=args.seed)
         data = Subset(Data.ZipDataset(nxz_data.data, nxz_data), indices=idxs)
         loader = DataLoader(data,
             batch_size=args.code_bs,
@@ -283,13 +285,25 @@ class ImageLatentDataset(Dataset):
                 inputs.append(x)
                 noised_inputs.append(nx)
                 generates.append(fx)
+            
+            for (x,_),(_,_,_) in tqdm(loader,
+                desc="Generating images from ImageLatentDataset",
+                total=len(loader),
+                leave=False,
+                dynamic_ncols=True):
+
+                nx = Utils.with_noise(x, std=args.std, seed=args.seed+2)
+                fx = model(nx, num_z=num_samples, seed=args.seed).cpu()
+                inputs.append(x)
+                noised_inputs.append(nx)
+                generates.append(fx)
 
         inputs = torch.cat(inputs, dim=0).unsqueeze(1)
         noised_inputs = torch.cat(noised_inputs, dim=0).unsqueeze(1)
-        generates = torch.cat(generates, dim=0).view(len(idxs), num_samples, *image_shape)
+        generates = torch.cat(generates, dim=0).view(len(idxs)*2, num_samples, *image_shape)
 
         images = torch.cat([inputs, noised_inputs, generates], dim=1)
-        images = images.view(len(idxs), num_samples + 2, *image_shape)
+        images = images.view(len(idxs)*2, num_samples + 2, *image_shape)
         return Utils.images_to_pil_image(images)
 
     @staticmethod
@@ -438,7 +452,8 @@ if __name__ == "__main__":
 
     wandb.init(anonymous="allow", id=args.uid, config=args,
         mode=args.wandb, project="Mini3MRL", entity="apex-lab",
-        name=os.path.basename(imle_model_folder(args)))
+        name=os.path.basename(imle_model_folder(args)),
+        settings=wandb.Settings(code_dir=os.path.dirname(__file__)))
 
     tqdm.write(f"MODEL\n{model.module}")
     
