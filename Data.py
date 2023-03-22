@@ -261,17 +261,20 @@ class ImageFolderSubset(Dataset):
             raise NotImplementedError()
 
 class ZipDataset(Dataset):
+    """Dataset returning the idxth element of any number of wrapped datasets. To
+    handle datasets of different sizes, the actual element returned from dataset
+    D is idx % len(D).
 
+    The length of the zipped dataset is therefore the length of its largest
+    constituent.
+    """
     def __init__(self, *datasets):
         super(ZipDataset, self).__init__()
-        data_lengths = [len(d) for d in datasets]
-        if not len(set(data_lengths)) == 1:
-            raise ValueError(f"All input datasets should have the same length, but got lengths of {data_lengths}")
-
         self.datasets = datasets
 
-    def __len__(self): return len(self.datasets[0])
-    def __getitem__(self, idx): return tuple([d[idx] for d in self.datasets])
+    def __len__(self): return max([len(d) for d in self.datasets])
+    def __getitem__(self, idx):
+        return tuple([d[idx % len(d)] for d in self.datasets])
 
 def dataset_to_tensors(dataset, bs=1000, num_workers=12):
     """Returns an (X, Y) tuple where [X] is the x-values of [dataset] and [Y] its

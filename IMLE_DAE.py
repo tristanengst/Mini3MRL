@@ -337,6 +337,79 @@ class ImageLatentDataset(Dataset):
         return loss.item() / total
 
     @staticmethod
+    def get_image_latent_dataset_top_and_bottom(model, loss_fn, dataset, args):
+        d = len(dataset)
+        with torch.no_grad():
+            least_losses = torch.ones(d * 2, device=device) * float("inf")
+            best_latents = Utils.de_dataparallel(model).get_codes(d * 2, device=device)
+            images = torch.zeros(d * 2, *dataset[0][0].shape)
+            noised_images = torch.zeros(d * 2, *dataset[0][0].shape)
+
+            loader = DataLoader(dataset,
+                batch_size=args.code_bs,
+                num_workers=args.num_workers,
+                shuffle=False,
+                pin_memory=True)
+
+            for idx,(x,_) in tqdm(enumerate(loader),
+                desc="Sampling outer loop",
+                total=len(loader),
+                leave=False,
+                dynamic_ncols=True):
+
+                start_idx = idx * args.code_bs
+                stop_idx = min(start_idx + args.code_bs, d)
+                x = x.to(device, non_blocking=True)
+                
+                x_top = x.clone()
+                x_top[:, :, 14:, :] = 0
+                x_bottom = x.clone()
+                x_bottom[:, :, :14, :] = 0
+
+                xn = Utils.with_noise(x, std=args.std)
+                noised_images[start_idx:stop_idx] = xn.cpu().clone()
+                noised_images[start_idx+d:stop_idx+d] = xn.cpu().clone()
+
+                images[start_idx:stop_idx] = x_top
+                images[start_idx+d:stop_idx+d] = x_bottom
+
+                for sample_idx in tqdm(range(args.ns),
+                    desc="Sampling inner loop",
+                    leave=False,
+                    dynamic_ncols=True):
+
+                    z = Utils.de_dataparallel(model).get_codes(len(xn), device=xn.device)
+                    fxn = model(xn, z)
+                    losses = loss_fn(fxn, x_top)
+                    losses = torch.sum(losses.view(len(x), -1), dim=1)
+
+                    # Ke thought the code below was wrong due to a common mistake
+                    # in how people do indexing, but it actually does pass sanity
+                    # checks. Still, it might be worth investigating further.
+                    change_idxs = (losses < least_losses[start_idx:stop_idx])
+                    least_losses[start_idx:stop_idx][change_idxs] = losses[change_idxs]
+                    best_latents[start_idx:stop_idx][change_idxs] = z[change_idxs]
+
+                for sample_idx in tqdm(range(args.ns),
+                    desc="Sampling inner loop",
+                    leave=False,
+                    dynamic_ncols=True):
+
+                    z = Utils.de_dataparallel(model).get_codes(len(xn), device=xn.device)
+                    fxn = model(xn, z)
+                    losses = loss_fn(fxn, x_bottom)
+                    losses = torch.sum(losses.view(len(x), -1), dim=1)
+
+                    # Ke thought the code below was wrong due to a common mistake
+                    # in how people do indexing, but it actually does pass sanity
+                    # checks. Still, it might be worth investigating further.
+                    change_idxs = (losses < least_losses[start_idx+d:stop_idx+d])
+                    least_losses[start_idx+d:stop_idx+d][change_idxs] = losses[change_idxs]
+                    best_latents[start_idx+d:stop_idx+d][change_idxs] = z[change_idxs]
+
+        return ImageLatentDataset(dataset, noised_images, best_latents.cpu(), images)
+
+    @staticmethod
     def get_image_latent_dataset(model, loss_fn, dataset, args):
         """Returns an ImageLatentDataset giving noised images and codes for
         [model] to use in IMLE training. 
@@ -349,6 +422,9 @@ class ImageLatentDataset(Dataset):
         dataset -- ImageFolder-like dataset of non-noised images to get codes for
         args    -- argparse Namespace
         """
+        if args.zero_half_target == 2:
+            return ImageLatentDataset.get_image_latent_dataset_top_and_bottom(model, loss_fn, dataset, args)
+
         with torch.no_grad():
             least_losses = torch.ones(len(dataset), device=device) * float("inf")
             best_latents = Utils.de_dataparallel(model).get_codes(len(dataset), device=device)
