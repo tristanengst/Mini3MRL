@@ -82,7 +82,7 @@ if __name__ == "__main__":
     else:
         raise NotImplementedError()
 
-    script = f"{file_move_command}\npython {slurm_args.script} {unparse_args(args)} --job_id $SLURM_JOB_ID --num_workers {num_cpus}{'--wandb offline' if slurm_args.force_wandb_offline else ''}"
+    script = f"{file_move_command}\npython {slurm_args.script} {unparse_args(args)} --job_id $SLURM_JOB_ID --num_workers {num_cpus}{' --wandb offline' if slurm_args.force_wandb_offline else ''}"
 
     if slurm_args.env == "conda":
         env_str = "conda activate py3103MRL"
