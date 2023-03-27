@@ -292,4 +292,19 @@ def dataset_to_tensors(dataset, bs=1000, num_workers=12):
         Y.append(y)
     return torch.cat(X, dim=0), torch.cat(Y, dim=0)
 
+class OneDDataset(Dataset):
+
+    def __init__(self, a=2, b1=6, b2=0, length=1024):
+        super(OneDDataset, self).__init__()
+        X = torch.rand(length // 2, 1) * 10
+        Y1 = a * X + b1
+        Y2 = a * X + b2
+
+        self.X = torch.cat([X, X.clone()], dim=0)
+        self.Y = torch.cat([Y1, Y2], dim=0)
+        self.Y = self.Y #+ torch.randn(*self.Y.shape) * .1
+
+    def __len__(self): return len(self.X)
+
+    def __getitem__(self, idx): return self.X[idx], self.Y[idx]
         

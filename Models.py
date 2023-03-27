@@ -347,3 +347,45 @@ class EqualizedLinear(nn.Module):
     def forward(self, x):
         bias = self.bias * self.b_mul if self.bias is not None else self.bias
         return nn.functional.linear(x, self.weight * self.w_mul, bias)
+
+
+class IMLE_OneDModel(nn.Module):
+
+    def __init__(self, latent_dim=1, z_map=None):
+        super(IMLE_OneDModel, self).__init__()
+        self.latent_dim = latent_dim
+        self.model = nn.Linear(1, 1)
+        self.a = nn.Parameter(torch.Tensor([[0.]]))
+        self.b = nn.Parameter(torch.Tensor([[0.]]))
+
+        h_dim = 512
+
+        if z_map == "mlp":
+            self.map = MLP(in_dim=self.latent_dim, out_dim=1, h_dim=h_dim, layers=4, equalized_lr=False, act_type="relu", end_with_act=False)
+
+        else:
+            self.map = nn.Identity()
+
+    def get_codes(self, bs, device="cpu", seed=None):
+        """Returns [bs] latent codes to be passed into the model.
+
+        Args:
+        bs      -- number of latent codes to return
+        device  -- device to return latent codes on
+        seed    -- None for no seed (outputs will be different on different
+                    calls), or a number for a fixed seed
+        """
+        if seed is None:
+            return torch.randn(bs, self.latent_dim, device=device)
+        else:
+            z = torch.zeros(bs, self.latent_dim, device=device)
+            z.normal_(generator=torch.Generator(device).manual_seed(seed))
+            return z
+    
+    def forward(self, x, z=None, num_z=1, seed=None):
+        if z is None:
+            z = self.get_codes(len(x) * num_z, device=x.device, seed=seed)
+        
+        fx = self.a * x + self.b
+        fx = torch.repeat_interleave(fx, z.shape[0] // x.shape[0], dim=0)
+        return fx + self.map(z)

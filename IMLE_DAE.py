@@ -383,9 +383,6 @@ class ImageLatentDataset(Dataset):
                     losses = loss_fn(fxn, x_top)
                     losses = torch.sum(losses.view(len(x), -1), dim=1)
 
-                    # Ke thought the code below was wrong due to a common mistake
-                    # in how people do indexing, but it actually does pass sanity
-                    # checks. Still, it might be worth investigating further.
                     change_idxs = (losses < least_losses[start_idx:stop_idx])
                     least_losses[start_idx:stop_idx][change_idxs] = losses[change_idxs]
                     best_latents[start_idx:stop_idx][change_idxs] = z[change_idxs]
@@ -400,9 +397,6 @@ class ImageLatentDataset(Dataset):
                     losses = loss_fn(fxn, x_bottom)
                     losses = torch.sum(losses.view(len(x), -1), dim=1)
 
-                    # Ke thought the code below was wrong due to a common mistake
-                    # in how people do indexing, but it actually does pass sanity
-                    # checks. Still, it might be worth investigating further.
                     change_idxs = (losses < least_losses[start_idx+d:stop_idx+d])
                     least_losses[start_idx+d:stop_idx+d][change_idxs] = losses[change_idxs]
                     best_latents[start_idx+d:stop_idx+d][change_idxs] = z[change_idxs]
@@ -469,9 +463,6 @@ class ImageLatentDataset(Dataset):
                     losses = loss_fn(fxn, x)
                     losses = torch.sum(losses.view(len(x), -1), dim=1)
 
-                    # Ke thought the code below was wrong due to a common mistake
-                    # in how people do indexing, but it actually does pass sanity
-                    # checks. Still, it might be worth investigating further.
                     change_idxs = (losses < least_losses[start_idx:stop_idx])
                     least_losses[start_idx:stop_idx][change_idxs] = losses[change_idxs]
                     best_latents[start_idx:stop_idx][change_idxs] = z[change_idxs]
