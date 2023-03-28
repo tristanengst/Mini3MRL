@@ -100,7 +100,7 @@ class IMLE_DAE_MLP(nn.Module):
         self.ignore_latents = ignore_latents
         self.encoder = MLPEncoder(in_dim=self.in_out_dim, **vars(args))
         self.decoder = MLPDecoder(out_dim=self.in_out_dim, **vars(args))
-        self.ada_in = IgnoreLatentAdaIN(**vars(args)) if ignore_latents else AdaIN(**vars(args))
+        self.ada_in = IgnoreLatentAdaIN(args) if ignore_latents else AdaIN(args)
         self.feat_dim = args.feat_dim
         self.latent_dim = args.latent_dim
 
@@ -133,6 +133,7 @@ class IMLE_DAE_MLP(nn.Module):
 
     def to_ignore_latent_imle_dae_mlp(self):
         ignore_latent_imle_dae_mlp = self.__class__(self.args,
+            in_out_dim=self.in_out_dim,
             ignore_latents=True)
         ignore_latent_imle_dae_mlp.load_state_dict(self.state_dict(), strict=False)
         return ignore_latent_imle_dae_mlp
@@ -162,7 +163,6 @@ class EncoderWithAdaIn(nn.Module):
         self.ada_in = ada_in
         self.latent_dim = self.ada_in.feat_dim
         self.feat_dim = self.encoder.feat_dim
-
         self.use_mean_representation = use_mean_representation
 
     def get_codes(self, bs, device="cpu", seed=None):
@@ -203,22 +203,23 @@ class EncoderWithAdaIn(nn.Module):
 
 class AdaIN(nn.Module):
 
-    def __init__(self, feat_dim=64, adain_x_norm=None, normalize_z=True, mapping_net_layers=8, mapping_net_h_dim=512, latent_dim=512, **kwargs):
+    def __init__(self, args):
         super(AdaIN, self).__init__()
-        self.feat_dim = feat_dim
-        self.normalize_z = normalize_z
-        self.mapping_net_h_dim = mapping_net_h_dim
-        self.mapping_net_layers = mapping_net_layers
-        self.latent_dim = latent_dim
-        self.adain_x_norm = adain_x_norm
+        self.args = args
+        self.feat_dim = args.feat_dim
+        self.normalize_z = args.normalize_z
+        self.mapping_net_h_dim = args.mapping_net_h_dim
+        self.mapping_net_layers = args.mapping_net_layers
+        self.latent_dim = args.latent_dim
+        self.adain_x_norm = args.adain_x_norm
 
         layers = []
         if normalize_z:
             layers.append(("normalize_z", PixelNormLayer(epsilon=0)))
         layers.append(("mapping_net", MLP(in_dim=latent_dim,
-            h_dim=mapping_net_h_dim,
-            layers=mapping_net_layers,
-            out_dim=self.feat_dim * 2,
+            h_dim=args.mapping_net_h_dim,
+            layers=args.mapping_net_layers,
+            out_dim=args.feat_dim * 2,
             act_type=args.mapping_net_act,
             equalized_lr=args.mapping_net_eqlr,
             end_with_act=False)))
@@ -227,9 +228,9 @@ class AdaIN(nn.Module):
 
         self.x_modification_layer = nn.Linear(self.feat_dim, self.feat_dim)
 
-        if adain_x_norm == "none":
+        if args.adain_x_norm == "none":
             self.x_norm_layer = nn.Identity()
-        elif adain_x_norm == "norm":
+        elif args.adain_x_norm == "norm":
             self.x_norm_layer = NormLayer()
         else:
             raise NotImplementedError()
@@ -270,12 +271,7 @@ class AdaIN(nn.Module):
         return result
 
     def to_ignore_latent_ada_in(self):
-        ada_in = IgnoreLatentAdaIN(feat_dim=self.feat_dim,
-            normalize_z=self.normalize_z,
-            mapping_net_h_dim=self.mapping_net_h_dim,
-            mapping_net_layers=self.mapping_net_layers,
-            latent_dim=self.latent_dim,
-            adain_x_norm=self.adain_x_norm)
+        ada_in = IgnoreLatentAdaIN(self.args)
         ada_in.load_state_dict(self.state_dict(), strict=False)
         return ada_in
 
@@ -355,22 +351,19 @@ class EqualizedLinear(nn.Module):
 class OneDFakeAdaIN(nn.Module):
     """A mapping net that can accept and ignore a value [x]."""
     
-    def __init__(self, latent_dim, mapping_net_h_dim=512, mapping_net_layers=4,
-        equalized_lr=True, act_type="leakyrelu", normalize_z=True):
+    def __init__(self, args):
         super(OneDFakeAdaIN, self).__init__()
-        self.latent_dim = latent_dim
         layers = []
-        if normalize_z:
+        if args.normalize_z:
             layers.append(("normalize_z", PixelNormLayer(epsilon=0)))
-
-        layers.append(MLP(in_dim=self.latent_dim,
+        layers.append(("mapping_net", MLP(in_dim=args.latent_dim,
+            h_dim=args.mapping_net_h_dim,
+            layers=args.mapping_net_layers,
             out_dim=1,
-            h_dim=mapping_net_h_dim,
-            layers=mapping_net_layers,
-            equalized_lr=equalized_lr,
-            act_type=act_type,
-            end_with_act=False))
-        self.model = nn.Sequential(*layers)
+            act_type=args.mapping_net_act,
+            equalized_lr=args.mapping_net_eqlr,
+            end_with_act=False)))
+        self.model = nn.Sequential(OrderedDict(layers))
 
     def forward(self, *args): return self.model(args[-1])
 
@@ -381,12 +374,7 @@ class IMLEOneDBasic(nn.Module):
         self.latent_dim = args.latent_dim
         self.a = nn.Parameter(torch.Tensor([[0.]]))
         self.b = nn.Parameter(torch.Tensor([[0.]]))
-        self.ada_in = OneDFakeAdaIN(latent_dim=self.latent_dim,
-            mapping_net_h_dim=args.mapping_net_h_dim,
-            mapping_net_layers=args.mapping_net_layers,
-            act_type=args.mapping_net_act,
-            equalized_lr=args.mapping_net_eqlr,
-            normalize_z=args.normalize_z)
+        self.ada_in = OneDFakeAdaIN(args)
 
     def get_codes(self, bs, device="cpu", seed=None):
         """Returns [bs] latent codes to be passed into the model.
