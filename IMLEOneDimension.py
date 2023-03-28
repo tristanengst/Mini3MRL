@@ -31,7 +31,7 @@ def imle_model_folder(args, make_folder=False):
     data_str = Data.dataset_pretty_name(args.data_tr)
     suffix = "" if args.suffix is None else f"-{args.suffix}"
     lrs = "_".join([f"{lr:.2e}" for idx,lr in enumerate(args.lrs) if idx % 2 == 1])
-    folder = f"{args.save_folder}/models_{args.script}/{args.script}-bs{args.bs}-epochs{args.epochs}-ipe{args.ipe}-lr{lrs}-ns{args.ns}-seed{args.seed}-{args.uid}{suffix}"
+    folder = f"{args.save_folder}/models_{args.script}/{args.script}-{args.arch}-bs{args.bs}-epochs{args.epochs}-ipe{args.ipe}-lr{lrs}-ns{args.ns}-seed{args.seed}-{args.uid}{suffix}"
 
     if make_folder:
         Utils.conditional_make_folder(folder)
@@ -137,18 +137,19 @@ class ImageLatentDataset(Dataset):
                 )))
             fig.write_image("cur_output.png")
 
-            with torch.no_grad():
-                x = torch.arange(-3, 3, .05).float().view(-1, 1).to(device)
-                y = model.module.map(x)
+            if args.latent_dim == 1:
+                with torch.no_grad():
+                    z = torch.arange(-3, 3, .05).float().view(-1, 1).to(device)
+                    y = model.module.ada_in(torch.zeros(1, args.feat_dim, device=device), z)
+                z = z.view(-1)
+                y = y.view(-1)
 
-            x = x.view(-1)
-            y = y.view(-1)
-
-            import plotly.express as px
-            fig2 = px.scatter(x=x.detach().cpu().numpy(), y=y.detach().cpu().numpy())
-            fig2.write_image("cur_noise.png")
-        
-        return Image.open(io.BytesIO(fig.to_image(format="png"))), Image.open(io.BytesIO(fig2.to_image(format="png")))
+                import plotly.express as px
+                fig2 = px.scatter(x=z.detach().cpu().numpy(), y=y.detach().cpu().numpy())
+                fig2.write_image("cur_noise.png")
+                return Image.open(io.BytesIO(fig.to_image(format="png"))), Image.open(io.BytesIO(fig2.to_image(format="png")))
+            else:
+                return Image.open(io.BytesIO(fig.to_image(format="png"))), Image.fromarray(np.zeros(shape=(32,32), dtype=np.int8))
 
     @staticmethod
     def eval_model(nxz_data, model, args, loss_fn=None, use_sampled_codes=True):
@@ -256,7 +257,8 @@ def get_args(args=None):
 
     args = P.parse_args() if args is None else P.parse_args(args)
     args.uid = wandb.util.generate_id() if args.uid is None else args.uid
-    args.script = "linear_imle" if args.script is None else args.script
+    args.script = "1D_imle" if args.script is None else args.script
+    args.data_tr, args.data_val = "1D", "1D"
     args.lrs = Utils.StepScheduler.process_lrs(args.lrs)
     args.probe_lrs = Utils.StepScheduler.process_lrs(args.probe_lrs)
 
@@ -269,7 +271,7 @@ if __name__ == "__main__":
 
     if args.resume is None:
         Utils.set_seed(args.seed)
-        model = Models.IMLE_OneDModel(latent_dim=1, z_map="mlp")
+        model = Models.get_model(args, imle=True, in_out_dim=1)
         model = nn.DataParallel(model, device_ids=args.gpus).to(device)
         optimizer = torch.optim.Adam(model.parameters(), lr=1,
             weight_decay=args.wd)
@@ -278,7 +280,7 @@ if __name__ == "__main__":
         states = torch.load(args.resume)
         Utils.set_seed(states["seeds"])
         args = argparse.Namespace(**vars(states["args"]) | vars(args))
-        model = Models.IMLE_OneDModel(latent_dim=1, z_map=None)
+        model = Models.get_model(args, imle=True,  in_out_dim=1)
         model.load_state_dict(states["model"], strict=False)
         model = nn.DataParallel(model, device_ids=args.gpus).to(device)
         optimizer = torch.optim.Adam(model.parameters(), lr=1,
@@ -289,14 +291,14 @@ if __name__ == "__main__":
         args.uid = states["args"].uid if args.continue_run else args.uid
 
     wandb.init(anonymous="allow", id=args.uid, config=args,
-        mode=args.wandb, project="Mini3MRL-Linear", entity="apex-lab",
+        mode=args.wandb, project="Mini3MRL-1D", entity="apex-lab",
         name=os.path.basename(imle_model_folder(args)),
         resume="allow" if args.continue_run else "never",
         settings=wandb.Settings(code_dir=os.path.dirname(__file__)))
     
     scheduler = Utils.StepScheduler(optimizer, args.lrs, last_epoch=last_epoch)
     loss_fn = nn.MSELoss()
-    data_tr, data_val = Data.OneDDataset(), Data.OneDDataset()
+    data_tr, data_val = Data.OneDDataset(args), Data.OneDDataset(args)
 
     tqdm.write(f"---ARGS---\n{Utils.sorted_namespace(args)}\n----------")
     tqdm.write(f"---MODEL---\n{model.module}")
@@ -352,7 +354,9 @@ if __name__ == "__main__":
         if epoch % args.eval_iter == 0 or epoch == args.epochs - 1:
             _ = evaluate(model, data_tr, data_val, scheduler, args, cur_step,
                 nxz_data_tr=epoch_dataset)
-            tqdm.write(f"MODEL WEIGHTS: {model.module.a} {model.module.b}")
+
+            if args.arch == "1dbasic":
+                tqdm.write(f"MODEL WEIGHTS: {model.module.a} {model.module.b}")
 
         if args.save_iter == 0:
             pass

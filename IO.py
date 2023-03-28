@@ -65,9 +65,9 @@ def parser_with_logging_args(P):
     return P
 
 def parser_with_data_args(P):
-    P.add_argument("--data_tr", required=True, type=dataset_spec_type,
+    P.add_argument("--data_tr", default="mnist", type=dataset_spec_type,
         help="Training data. 'mnist', 'cifar10', or path to a file.")
-    P.add_argument("--data_val", default=None, required=False, type=dataset_spec_type,
+    P.add_argument("--data_val", default="mnist", type=dataset_spec_type,
         help="Validation data. If not specified, uses the data excluded through N_WAY and N_SHOT settings.")
     P.add_argument("--n_shot", default="all", type=int_or_all,
         help="Number of examples per class. -1 or 'all' for all")
@@ -76,7 +76,7 @@ def parser_with_data_args(P):
     return P
 
 def parser_with_training_args(P):
-    P.add_argument("--arch", choices=["mlp"], default="mlp",
+    P.add_argument("--arch", choices=["mlp", "1dbasic"], default="mlp",
         help="Model architecture")
     P.add_argument("--feat_dim", type=int, default=64,
         help="Dimensionality of the features extracted by the model")

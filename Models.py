@@ -7,12 +7,14 @@ import Utils
 
 device = Utils.device
 
-def get_model(args, imle=False):
+def get_model(args, imle=False, **kwargs):
     """Returns the model architecture specified in argparse Namespace [args].
     [imle] toggles whether the model should be created for IMLE or not.
     """
     if args.arch == "mlp" and imle:
-        return IMLE_DAE_MLP(args)
+        return IMLE_DAE_MLP(args, **kwargs)
+    elif args.arch == "1dbasic" and imle:
+        return IMLEOneDBasic(args, **kwargs)
     elif args.arch == "mlp" and not imle:
         return DAE_MLP(args)
     else:
@@ -91,12 +93,13 @@ class DAE_MLP(nn.Module):
 
 class IMLE_DAE_MLP(nn.Module):
 
-    def __init__(self, args, ignore_latents=False, **kwargs):
+    def __init__(self, args, ignore_latents=False, in_out_dim=784, **kwargs):
         super(IMLE_DAE_MLP, self).__init__()
         self.args = args
+        self.in_out_dim = in_out_dim
         self.ignore_latents = ignore_latents
-        self.encoder = MLPEncoder(**vars(args))
-        self.decoder = MLPDecoder(**vars(args))
+        self.encoder = MLPEncoder(in_dim=self.in_out_dim, **vars(args))
+        self.decoder = MLPDecoder(out_dim=self.in_out_dim, **vars(args))
         self.ada_in = IgnoreLatentAdaIN(**vars(args)) if ignore_latents else AdaIN(**vars(args))
         self.feat_dim = args.feat_dim
         self.latent_dim = args.latent_dim
@@ -240,7 +243,7 @@ class AdaIN(nn.Module):
         taken over [num_z] different latent codes.
         """
         with torch.no_grad():
-            z = self.model(get_codes(num_z, 512, device=device))
+            z = self.model(get_codes(num_z, self.latent_dim, device=device))
             z_shift, z_scale = z[:, :self.feat_dim], z[:, self.feat_dim:]
             return torch.mean(z_shift, dim=0), torch.std(z_shift, dim=0), torch.mean(z_scale, dim=0), torch.std(z_scale, dim=0)
 
@@ -349,22 +352,32 @@ class EqualizedLinear(nn.Module):
         return nn.functional.linear(x, self.weight * self.w_mul, bias)
 
 
-class IMLE_OneDModel(nn.Module):
-
-    def __init__(self, latent_dim=1, z_map=None):
-        super(IMLE_OneDModel, self).__init__()
+class OneDFakeAdaIN(nn.Module):
+    """A mapping net that can accept and ignore a value [x]."""
+    
+    def __init__(self, latent_dim, mapping_net_h_dim=512, mapping_net_layers=4):
+        super(OneDFakeAdaIN, self).__init__()
         self.latent_dim = latent_dim
-        self.model = nn.Linear(1, 1)
+        self.model = MLP(in_dim=self.latent_dim,
+            out_dim=1,
+            h_dim=mapping_net_h_dim,
+            layers=mapping_net_layers,
+            equalized_lr=True,
+            act_type="leakyrelu",
+            end_with_act=False)
+
+    def forward(self, *args): return self.model(args[-1])
+
+class IMLEOneDBasic(nn.Module):
+
+    def __init__(self, args, in_out_dim=1):
+        super(IMLEOneDBasic, self).__init__()
+        self.latent_dim = args.latent_dim
         self.a = nn.Parameter(torch.Tensor([[0.]]))
         self.b = nn.Parameter(torch.Tensor([[0.]]))
-
-        h_dim = 512
-
-        if z_map == "mlp":
-            self.map = MLP(in_dim=self.latent_dim, out_dim=1, h_dim=h_dim, layers=4, equalized_lr=False, act_type="relu", end_with_act=False)
-
-        else:
-            self.map = nn.Identity()
+        self.ada_in = OneDFakeAdaIN(latent_dim=self.latent_dim,
+            mapping_net_h_dim=args.mapping_net_h_dim,
+            mapping_net_layers=args.mapping_net_layers)
 
     def get_codes(self, bs, device="cpu", seed=None):
         """Returns [bs] latent codes to be passed into the model.
@@ -388,4 +401,4 @@ class IMLE_OneDModel(nn.Module):
         
         fx = self.a * x + self.b
         fx = torch.repeat_interleave(fx, z.shape[0] // x.shape[0], dim=0)
-        return fx + self.map(z)
+        return fx + self.ada_in(z)

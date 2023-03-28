@@ -47,7 +47,7 @@ def dataset_pretty_name(data_str):
     long file path. Datasets given by file paths are expected to come from paths
     of the form .../DATASET_NAME/SPLIT.
     """
-    if data_str in ["mnist", "cifar10"]:
+    if data_str in ["mnist", "cifar10", "1D"]:
         return data_str
     elif os.path.exists(data_str):
         return os.path.basename(os.path.dirname(data_str)).strip("/")
@@ -294,15 +294,21 @@ def dataset_to_tensors(dataset, bs=1000, num_workers=12):
 
 class OneDDataset(Dataset):
 
-    def __init__(self, a=2, b1=6, b2=0, length=1024):
+    def __init__(self, args, a=2, b1=6, b2=0, length=1024):
         super(OneDDataset, self).__init__()
         X = torch.rand(length // 2, 1) * 10
         Y1 = a * X + b1
         Y2 = a * X + b2
 
+        self.a = a
+        self.b1 = b1
+        self.b2 = b2
+
         self.X = torch.cat([X, X.clone()], dim=0)
         self.Y = torch.cat([Y1, Y2], dim=0)
-        self.Y = self.Y #+ torch.randn(*self.Y.shape) * .1
+        self.Y = self.Y
+
+    def __str__(self): return f"{self.__class__.__name__} [a={self.a} b1={self.b1} b2={self.b2} length={self.__len__()}]"
 
     def __len__(self): return len(self.X)
 
