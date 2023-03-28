@@ -219,9 +219,9 @@ class AdaIN(nn.Module):
             h_dim=mapping_net_h_dim,
             layers=mapping_net_layers,
             out_dim=self.feat_dim * 2,
-            equalized_lr=True,
-            end_with_act=False,
-            act_type="leakyrelu")))
+            act_type=args.mapping_net_act,
+            equalized_lr=args.mapping_net_eqlr,
+            end_with_act=False)))
 
         self.model = nn.Sequential(OrderedDict(layers))
 
@@ -355,16 +355,22 @@ class EqualizedLinear(nn.Module):
 class OneDFakeAdaIN(nn.Module):
     """A mapping net that can accept and ignore a value [x]."""
     
-    def __init__(self, latent_dim, mapping_net_h_dim=512, mapping_net_layers=4):
+    def __init__(self, latent_dim, mapping_net_h_dim=512, mapping_net_layers=4,
+        equalized_lr=True, act_type="leakyrelu", normalize_z=True):
         super(OneDFakeAdaIN, self).__init__()
         self.latent_dim = latent_dim
-        self.model = MLP(in_dim=self.latent_dim,
+        layers = []
+        if normalize_z:
+            layers.append(("normalize_z", PixelNormLayer(epsilon=0)))
+
+        layers.append(MLP(in_dim=self.latent_dim,
             out_dim=1,
             h_dim=mapping_net_h_dim,
             layers=mapping_net_layers,
-            equalized_lr=True,
-            act_type="leakyrelu",
-            end_with_act=False)
+            equalized_lr=equalized_lr,
+            act_type=act_type,
+            end_with_act=False))
+        self.model = nn.Sequential(*layers)
 
     def forward(self, *args): return self.model(args[-1])
 
@@ -377,7 +383,10 @@ class IMLEOneDBasic(nn.Module):
         self.b = nn.Parameter(torch.Tensor([[0.]]))
         self.ada_in = OneDFakeAdaIN(latent_dim=self.latent_dim,
             mapping_net_h_dim=args.mapping_net_h_dim,
-            mapping_net_layers=args.mapping_net_layers)
+            mapping_net_layers=args.mapping_net_layers,
+            act_type=args.mapping_net_act,
+            equalized_lr=args.mapping_net_eqlr,
+            normalize_z=args.normalize_z)
 
     def get_codes(self, bs, device="cpu", seed=None):
         """Returns [bs] latent codes to be passed into the model.

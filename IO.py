@@ -138,5 +138,9 @@ def parser_with_imle_args(P):
         help="Number of layers in AdaIN mapping network")
     P.add_argument("--latent_dim", default=512, type=int,
         help="Latent code dimensionality")
+    P.add_argument("--mapping_net_eqlr", default=1, type=int, choices=[0, 1],
+        help="EquilizedLR in mapping net")
+    P.add_argument("--mapping_net_act", default="leakyrelu", choices=["relu", "leakyrelu"],
+        help="Mapping net activation")
     return P
 
