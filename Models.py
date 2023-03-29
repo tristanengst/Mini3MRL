@@ -214,7 +214,7 @@ class AdaIN(nn.Module):
         self.adain_x_norm = args.adain_x_norm
 
         layers = []
-        if normalize_z:
+        if args.normalize_z:
             layers.append(("normalize_z", PixelNormLayer(epsilon=0)))
         layers.append(("mapping_net", MLP(in_dim=latent_dim,
             h_dim=args.mapping_net_h_dim,
