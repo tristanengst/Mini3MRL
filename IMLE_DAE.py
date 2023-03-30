@@ -484,6 +484,10 @@ def get_args(args=None):
     args.lrs = Utils.StepScheduler.process_lrs(args.lrs)
     args.probe_lrs = Utils.StepScheduler.process_lrs(args.probe_lrs)
 
+    if args.persistent_workers == 2:
+        args.persistent_workers = int(args.epochs <= 2000)
+        tqdm.write(f"LOG: Setting PERSISTENT_WORKES to {args.persistent_workers} to adapt to number of epochs")
+
     if not args.probe_trials == 1:
         raise NotImplementedError(f"Running multiple probe trials is currently not supported in a script that logs to WandB.")
     return args
@@ -543,11 +547,12 @@ if __name__ == "__main__":
             loss_fn=nn.BCEWithLogitsLoss(reduction="none"),
             dataset=data_tr,
             args=args)
+        
         loader = DataLoader(epoch_dataset,
             shuffle=True,
             pin_memory=True,
             batch_size=args.bs,
-            persistent_workers=True,
+            persistent_workers=args.persistent_workers,
             num_workers=args.num_workers)
         chain_loader = itertools.chain(*[loader] * args.ipe)
         chain_loader_len = len(loader) * args.ipe

@@ -400,8 +400,5 @@ class IMLEOneDBasic(nn.Module):
 
         # tqdm.write(f"F1 {fx.view(-1)}")
         fx = torch.repeat_interleave(fx, z.shape[0] // x.shape[0], dim=0)
-        # tqdm.write(f"F2 {fx.view(-1)}")
-
         ada_in_result = self.ada_in(z)
-        # tqdm.write(f"    A {ada_in_result.view(-1)}")
-        return fx + ada_in_result
+=        return fx + ada_in_result
