@@ -296,17 +296,15 @@ class OneDDataset(Dataset):
 
     def __init__(self, args, a=2, b1=6, b2=0, length=1024):
         super(OneDDataset, self).__init__()
-        X = torch.rand(length // 2, 1) * 10
-        Y1 = a * X + b1
-        Y2 = a * X + b2
+        self.X = torch.rand(length, 1) * 10
+        self.Y = torch.zeros(*self.X.shape)
 
-        self.a = a
-        self.b1 = b1
-        self.b2 = b2
+        even_idxs = range(0, length, 2)
+        odd_idxs = range(1, length, 2)
+        self.Y[even_idxs, :] = self.X[even_idxs, :] * a + b1
+        self.Y[odd_idxs, :] = self.X[odd_idxs, :] * a + b2
 
-        self.X = torch.cat([X, X.clone()], dim=0)
-        self.Y = torch.cat([Y1, Y2], dim=0)
-        self.Y = self.Y
+        self.a, self.b1, self.b2 = a, b1, b2
 
     def __str__(self): return f"{self.__class__.__name__} [a={self.a} b1={self.b1} b2={self.b2} length={self.__len__()}]"
 

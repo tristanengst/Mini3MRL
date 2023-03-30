@@ -66,9 +66,9 @@ def evaluate(model, data_tr, data_val, scheduler, args, cur_step, nxz_data_tr=No
     loss_tr_min = ImageLatentDataset.eval_model(nxz_data_tr, model, args, use_sampled_codes=True)
     loss_tr_mean = ImageLatentDataset.eval_model(nxz_data_tr, model, args, use_sampled_codes=False)
 
-    epoch = (cur_step // (len(data_tr) * args.ipe // args.bs)) - 1
+    epoch = (cur_step // (len(data_tr) * max(1, args.ipe // args.bs))) - 1
 
-    tqdm.write(f"Epoch {epoch}/{args.epochs} - Step {cur_step}/{len(data_tr) * args.ipe * args.epochs // args.bs} - lr={scheduler.get_lr():.5e} loss/min/tr={loss_tr_min:.5e} loss/mean/tr={loss_tr_mean:.5f}")
+    tqdm.write(f"Epoch {epoch}/{args.epochs} - Step {cur_step}/{len(data_tr) * args.ipe * max(1, args.epochs // args.bs)} - lr={scheduler.get_lr():.5e} loss/min/tr={loss_tr_min:.5e} loss/mean/tr={loss_tr_mean:.5f}")
 
     wandb.log({
         "loss/min/tr": loss_tr_min,
@@ -94,7 +94,8 @@ class ImageLatentDataset(Dataset):
         return self.noised_images[idx], self.latents[idx], self.images[idx]
         
     @staticmethod
-    def generate_images(nxz_data, model, args, idxs=None, num_images=None, num_samples=None, noise_seed=None, latents_seed=None, idxs_seed=None):
+    def generate_images(nxz_data, model, args, idxs=None, num_images=None,
+        num_samples=None, noise_seed=None, latents_seed=None, idxs_seed=None):
         """Returns a PIL image from running [model] on [nxz_data]. Each row in
         the image contains:
         (1) a target image
@@ -137,9 +138,10 @@ class ImageLatentDataset(Dataset):
                 )))
             fig.write_image("cur_output.png")
 
-            if args.latent_dim == 1:
+            if args.latent_dim == 1 and args.feat_dim == 1:
                 with torch.no_grad():
                     z = torch.arange(-3, 3, .05).float().view(-1, 1).to(device)
+                    z = torch.cartesian_product(z, z)
                     y = model.module.ada_in(torch.zeros(1, args.feat_dim, device=device), z)
                 z = z.view(-1)
                 y = y.view(-1)
@@ -148,8 +150,46 @@ class ImageLatentDataset(Dataset):
                 fig2 = px.scatter(x=z.detach().cpu().numpy(), y=y.detach().cpu().numpy())
                 fig2.write_image("cur_noise.png")
                 return Image.open(io.BytesIO(fig.to_image(format="png"))), Image.open(io.BytesIO(fig2.to_image(format="png")))
+            elif args.latent_dim == 2  and args.feat_dim == 1:
+                with torch.no_grad():
+                    z = torch.arange(-3, 3, .05).float().to(device)
+                    z = torch.cartesian_prod(z, z)
+                    x = torch.ones(len(z), args.feat_dim, device=device)
+                    y = model.module.ada_in(x, z)
+
+                z = z.view(len(z), 2).cpu().numpy()
+                y = y.view(-1).cpu().numpy()
+
+                import plotly.express as px
+                fig2 = px.scatter(x=z[:, 0], y=z[:, 1], color=y)
+                fig2.write_image("cur_noise.png")
+                return Image.open(io.BytesIO(fig.to_image(format="png"))), Image.open(io.BytesIO(fig2.to_image(format="png")))
+            elif args.feat_dim == 1:
+                with torch.no_grad():
+                    z = Utils.de_dataparallel(model).get_codes(100, device=device)
+                    x = torch.zeros(len(z), args.feat_dim, device=device)
+                    tqdm.write(f"SHAPES {x.shape} {z.shape}")
+                    y = model.module.ada_in(x, z)
+
+                y = y.view(-1).cpu().numpy()
+
+                import plotly.express as px
+                fig2 = px.scatter(x=np.zeros(shape=y.shape), y=y, color=y)
+                fig2.write_image("cur_noise.png")
+                return Image.open(io.BytesIO(fig.to_image(format="png"))), Image.open(io.BytesIO(fig2.to_image(format="png")))
             else:
-                return Image.open(io.BytesIO(fig.to_image(format="png"))), Image.fromarray(np.zeros(shape=(32,32), dtype=np.int8))
+                with torch.no_grad():
+                    z = Utils.de_dataparallel(model).get_codes(100, device=device)
+                    x = torch.zeros(len(z), args.feat_dim, device=device)
+                    tqdm.write(f"SHAPES {x.shape} {z.shape}")
+                    y = model.module.ada_in(x, z)
+
+                y = y.view(-1).cpu().numpy()
+
+                import plotly.express as px
+                fig2 = px.scatter(x=np.zeros(shape=y.shape), y=y, color=y)
+                fig2.write_image("cur_noise.png")
+                return Image.open(io.BytesIO(fig.to_image(format="png"))), Image.fromarray(np.zeros(shape=(128,128), dtype=np.int8))
 
     @staticmethod
     def eval_model(nxz_data, model, args, loss_fn=None, use_sampled_codes=True):
@@ -297,8 +337,11 @@ if __name__ == "__main__":
         settings=wandb.Settings(code_dir=os.path.dirname(__file__)))
     
     scheduler = Utils.StepScheduler(optimizer, args.lrs, last_epoch=last_epoch)
-    loss_fn = nn.MSELoss()
+    loss_fn = nn.MSELoss(reduction="none")
     data_tr, data_val = Data.OneDDataset(args), Data.OneDDataset(args)
+
+    # data_tr = Subset(data_tr, indices=range(6))
+    # data_val = Subset(data_val, indices=range(6))
 
     tqdm.write(f"---ARGS---\n{Utils.sorted_namespace(args)}\n----------")
     tqdm.write(f"---MODEL---\n{model.module}")
@@ -322,7 +365,7 @@ if __name__ == "__main__":
             dataset=data_tr,
             args=args)
         loader = DataLoader(epoch_dataset,
-            shuffle=True,
+            shuffle=False,
             pin_memory=True,
             batch_size=args.bs,
             persistent_workers=True,
@@ -342,7 +385,7 @@ if __name__ == "__main__":
 
             fxn = model(xn, z) 
             loss = loss_fn(fxn, x)
-            loss.backward()
+            loss.sum().backward()
             optimizer.step()
             model.zero_grad(set_to_none=True)
             cur_step += 1
@@ -354,9 +397,6 @@ if __name__ == "__main__":
         if epoch % args.eval_iter == 0 or epoch == args.epochs - 1:
             _ = evaluate(model, data_tr, data_val, scheduler, args, cur_step,
                 nxz_data_tr=epoch_dataset)
-
-            if args.arch == "1dbasic":
-                tqdm.write(f"MODEL WEIGHTS: {model.module.a} {model.module.b}")
 
         if args.save_iter == 0:
             pass
