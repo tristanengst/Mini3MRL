@@ -397,8 +397,5 @@ class IMLEOneDBasic(nn.Module):
             z = self.get_codes(len(x) * num_z, device=x.device, seed=seed)
         
         fx = self.a * x + self.b
-
-        # tqdm.write(f"F1 {fx.view(-1)}")
         fx = torch.repeat_interleave(fx, z.shape[0] // x.shape[0], dim=0)
-        ada_in_result = self.ada_in(z)
-=        return fx + ada_in_result
+        return fx + self.ada_in(z)
