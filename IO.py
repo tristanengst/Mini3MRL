@@ -33,8 +33,6 @@ def parser_with_default_args(P):
         help="Path to file to resume from")
     P.add_argument("--continue_run", choices=[0, 1], type=int, default=0,
         help="Whether to continue logging to the save run as in RESUME")
-    P.add_argument("--persistent_workers", choices=[0, 1, 2], type=int, default=2,
-        help="Whether to use persistent workers. 0: non-persistent, slow, can run indefinitely, 1: persistent, fast, OSError 24 at some point, 2: sets this adaptively which may be best")
     return P
 
 def parser_with_logging_args(P):

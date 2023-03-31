@@ -311,4 +311,20 @@ class OneDDataset(Dataset):
     def __len__(self): return len(self.X)
 
     def __getitem__(self, idx): return self.X[idx], self.Y[idx]
+
+class KKMExpandedDataset(Dataset):
+    """Dataset such that iterating through it in sequential order is equivalent
+    to [expand_factor] passes over [source] while upholding a KKM property.
+    """
+    def __init__(self, source, expand_factor, seed=0):
+        super(KKMExpandedDataset, self).__init__()
+        self.source = source
+        self.expand_factor = expand_factor
+        idxs = [Utils.sample(list(range(len(source))), k=len(source), seed=e+seed)
+            for e in range(expand_factor)]
+        self.idxs = np.array(Utils.flatten(idxs))
+
+    def __len__(self): return len(self.idxs)
+
+    def __getitem__(self, idx): return self.source[self.idxs[idx]]
         

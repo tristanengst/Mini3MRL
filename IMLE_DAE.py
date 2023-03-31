@@ -484,10 +484,6 @@ def get_args(args=None):
     args.lrs = Utils.StepScheduler.process_lrs(args.lrs)
     args.probe_lrs = Utils.StepScheduler.process_lrs(args.probe_lrs)
 
-    if args.persistent_workers == 2:
-        args.persistent_workers = int(args.epochs <= 2000)
-        tqdm.write(f"LOG: Setting PERSISTENT_WORKES to {args.persistent_workers} to adapt to number of epochs")
-
     if not args.probe_trials == 1:
         raise NotImplementedError(f"Running multiple probe trials is currently not supported in a script that logs to WandB.")
     return args
@@ -537,7 +533,9 @@ if __name__ == "__main__":
 
     cur_step = (last_epoch + 1) * args.ipe * math.ceil(len(data_tr) / args.bs)
     num_steps = args.ipe * math.ceil(len(data_tr) / args.bs)
-    _ = evaluate(model, data_tr, data_val, scheduler, args, cur_step)
+
+    if not args.eval_iter == 0:
+        _ = evaluate(model, data_tr, data_val, scheduler, args, cur_step)
     for epoch in tqdm(range(last_epoch + 1, args.epochs),
         dynamic_ncols=True,
         desc="Epochs"):
@@ -547,19 +545,18 @@ if __name__ == "__main__":
             loss_fn=nn.BCEWithLogitsLoss(reduction="none"),
             dataset=data_tr,
             args=args)
-        
+        epoch_dataset = Data.KKMExpandedDataset(epoch_dataset,
+            expand_factor=args.ipe,
+            seed=args.seed + epoch)
         loader = DataLoader(epoch_dataset,
-            shuffle=True,
+            shuffle=False,
             pin_memory=True,
             batch_size=args.bs,
-            persistent_workers=args.persistent_workers,
             num_workers=args.num_workers)
-        chain_loader = itertools.chain(*[loader] * args.ipe)
-        chain_loader_len = len(loader) * args.ipe
 
-        for idx,(xn,z,x) in tqdm(enumerate(chain_loader),
+        for idx,(xn,z,x) in tqdm(enumerate(loader),
             desc="Batches",
-            total=len(loader) * args.ipe,
+            total=len(loader),
             leave=False,
             dynamic_ncols=True):
 
@@ -576,9 +573,9 @@ if __name__ == "__main__":
 
         # Otherwise the worker threads hang around and cause problems?
         del loader
-        del chain_loader
         
-        if epoch % args.eval_iter == 0 or epoch == args.epochs - 1:
+        if not args.eval_iter == 0 and (epoch % args.eval_iter == 0
+            or epoch == args.epochs - 1):
             _ = evaluate(model, data_tr, data_val, scheduler, args, cur_step,
                 nxz_data_tr=epoch_dataset)
 

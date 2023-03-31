@@ -354,7 +354,8 @@ if __name__ == "__main__":
 
     cur_step = (last_epoch + 1) * args.ipe * math.ceil(len(data_tr) / args.bs)
     you = args.ipe * math.ceil(len(data_tr) / args.bs)
-    _ = evaluate(model, data_tr, data_val, scheduler, args, cur_step)
+    if not args.eval_iter == 0:
+        _ = evaluate(model, data_tr, data_val, scheduler, args, cur_step)
     for epoch in tqdm(range(last_epoch + 1, args.epochs),
         dynamic_ncols=True,
         desc="Epochs"):
@@ -364,18 +365,18 @@ if __name__ == "__main__":
             loss_fn=nn.MSELoss(reduction="none"),
             dataset=data_tr,
             args=args)
+        epoch_dataset = Data.KKMExpandedDataset(epoch_dataset,
+            expand_factor=args.ipe,
+            seed=args.seed + epoch)
         loader = DataLoader(epoch_dataset,
             shuffle=False,
             pin_memory=True,
             batch_size=args.bs,
-            persistent_workers=True,
             num_workers=args.num_workers)
-        chain_loader = itertools.chain(*[loader] * args.ipe)
-        chain_loader_len = len(loader) * args.ipe
 
-        for idx,(xn,z,x) in tqdm(enumerate(chain_loader),
+        for idx,(xn,z,x) in tqdm(enumerate(loader),
             desc="Batches",
-            total=len(loader) * args.ipe,
+            total=len(loader),
             leave=False,
             dynamic_ncols=True):
 
@@ -385,16 +386,16 @@ if __name__ == "__main__":
 
             fxn = model(xn, z) 
             loss = loss_fn(fxn, x)
-            loss.sum().backward()
+            loss.backward()
             optimizer.step()
             model.zero_grad(set_to_none=True)
             cur_step += 1
 
         # Otherwise the worker threads hang around and cause problems?
         del loader
-        del chain_loader
         
-        if epoch % args.eval_iter == 0 or epoch == args.epochs - 1:
+        if not args.eval_iter == 0 and (epoch % args.eval_iter == 0
+            or epoch == args.epochs - 1):
             _ = evaluate(model, data_tr, data_val, scheduler, args, cur_step,
                 nxz_data_tr=epoch_dataset)
 
