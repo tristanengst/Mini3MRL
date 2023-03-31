@@ -144,5 +144,7 @@ def parser_with_imle_args(P):
         help="Mapping net activation")
     P.add_argument("--normalize_z", default=1, type=int, choices=[0, 1],
         help="Apply PixelNorm to latent codes")
+    P.add_argument("--mapping_net_lrmul", type=float, default=1,
+        help="Multiplier on mapping net learning rates with respect to those in LRS")
     return P
 

@@ -495,7 +495,8 @@ if __name__ == "__main__":
         Utils.set_seed(args.seed)
         model = Models.get_model(args, imle=True)
         model = nn.DataParallel(model, device_ids=args.gpus).to(device)
-        optimizer = torch.optim.Adam(model.parameters(), lr=1,
+        optimizer = torch.optim.Adam(
+            Utils.split_by_param_names(model, "mapping_net"), lr=1,
             weight_decay=args.wd)
         last_epoch = -1
     else:
@@ -505,7 +506,8 @@ if __name__ == "__main__":
         model = Models.get_model(args, imle=True)
         model.load_state_dict(states["model"], strict=False)
         model = nn.DataParallel(model, device_ids=args.gpus).to(device)
-        optimizer = torch.optim.Adam(model.parameters(), lr=1,
+        optimizer = torch.optim.Adam(
+            Utils.split_by_param_names(model, "mapping_net"), lr=1,
             weight_decay=args.wd)
         optimizer.load_state_dict(states["optimizer"])
         model = model.to(device)
@@ -518,7 +520,9 @@ if __name__ == "__main__":
         resume="allow" if args.continue_run else "never",
         settings=wandb.Settings(code_dir=os.path.dirname(__file__)))
     
-    scheduler = Utils.StepScheduler(optimizer, args.lrs, last_epoch=last_epoch)
+    scheduler = Utils.StepScheduler(optimizer, args.lrs,
+        last_epoch=last_epoch,
+        named_lr_muls={"mapping_net": args.mapping_net_lrmul})
     loss_fn = nn.BCEWithLogitsLoss()
     data_tr, data_val = Data.get_data_from_args(args)
 
@@ -545,10 +549,10 @@ if __name__ == "__main__":
             loss_fn=nn.BCEWithLogitsLoss(reduction="none"),
             dataset=data_tr,
             args=args)
-        epoch_dataset = Data.KKMExpandedDataset(epoch_dataset,
+        epoch_dataset_expanded = Data.KKMExpandedDataset(epoch_dataset,
             expand_factor=args.ipe,
             seed=args.seed + epoch)
-        loader = DataLoader(epoch_dataset,
+        loader = DataLoader(epoch_dataset_expanded,
             shuffle=False,
             pin_memory=True,
             batch_size=args.bs,

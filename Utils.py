@@ -221,7 +221,6 @@ def embeddings_to_pil_image(embeddings, classes, method="plain"):
 def de_dataparallel(model):
     return model.module if isinstance(model, nn.DataParallel) else model
 
-
 def sorted_namespace(args):
     """Returns argparse Namespace [args] after sorting the args in it by key
     value. The utility of this is printing.
@@ -232,6 +231,20 @@ def sorted_namespace(args):
 def set_worker_sharing_strategy(worker_id: int) -> None:
     torch.multiprocessing.set_sharing_strategy("file_system")
 
+def split_by_param_names(model, *param_names):
+    name2params = {p: [] for p in param_names} | {"default": []}
+    for k,v in model.named_parameters():
+        found_custom_name = False
+        for p in param_names:
+            if p in k:
+                name2params[p].append(v)
+                found_custom_name = True
+                break
+        if not found_custom_name:
+            name2params["default"].append(v)
+
+    return [{"params": p, "name": n} for n,p in name2params.items()]
+
 class StepScheduler:
     """StepLR but with easier control.
     
@@ -241,10 +254,13 @@ class StepScheduler:
                     and the learning rate for that step and subsequent steps
                     until a new learning rate is specified
     last_epoch  -- the last run step
+    named_lr_muls -- dictionary mapping names to multipliers on learning
+                            rates specified in lrs. This is a simple and convenient way to have different learning rates for different layers
     """
-    def __init__(self, optimizer, lrs, last_epoch=-1):
+    def __init__(self, optimizer, lrs, last_epoch=-1, named_lr_muls={}):
         super(StepScheduler, self).__init__()
         self.optimizer = optimizer
+        self.named_lr_muls = named_lr_muls
         
         # Get a mapping from epoch indices to the learning rates they should if
         # the learning rate should change at the start of the epoch
@@ -275,6 +291,9 @@ class StepScheduler:
 
         for pg in self.optimizer.param_groups:
             pg["lr"] = self.step2lr[cur_step]
+
+            if "name" in pg and pg["name"] in self.named_lr_muls:
+                pg["lr"] = pg["lr"] * self.named_lr_muls[pg["name"]]
 
         self.cur_step = cur_step + 1
 
