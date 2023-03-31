@@ -144,9 +144,9 @@ def evaluate(model, data_tr, data_val, scheduler, args, cur_step, nxz_data_tr=No
         num_workers=args.num_workers,
         pin_memory=True)
 
-    epoch = (cur_step // (len(loader_tr) * args.ipe)) - 1
-
-    tqdm.write(f"Epoch {epoch}/{args.epochs} - Step {cur_step}/{len(loader_tr) * args.ipe * args.epochs} - lr={scheduler.get_lr():.5e} loss/min/tr={loss_tr_min:.5f} loss/min/val={loss_val_min:.5f} loss/mean/tr={loss_tr_mean:.5f} loss/mean/val={loss_val_mean:.5f}")
+    epoch = int(cur_step / (math.ceil(len(data_tr) / args.bs) * args.ipe) - 1)
+    
+    tqdm.write(f"Epoch {epoch}/{args.epochs} - Step {cur_step}/{args.epochs * math.ceil(len(data_tr) / args.bs) * args.ipe} - lr={scheduler.get_lr():.5e} loss/min/tr={loss_tr_min:.5f} loss/min/val={loss_val_min:.5f} loss/mean/tr={loss_tr_mean:.5f} loss/mean/val={loss_val_mean:.5f}")
 
     # Evaluate on the probing task
     if epoch % args.probe_iter == 0 or epoch == -1 or epoch == args.epochs - 1:
@@ -514,18 +514,19 @@ if __name__ == "__main__":
         last_epoch = states["epoch"]
         args.uid = states["args"].uid if args.continue_run else args.uid
 
+    scheduler = Utils.StepScheduler(optimizer, args.lrs,
+        last_epoch=last_epoch,
+        named_lr_muls={"mapping_net": args.mapping_net_lrmul})
+    loss_fn = nn.BCEWithLogitsLoss()
+    data_tr, data_val = Data.get_data_from_args(args)
+    args.bs = min(args.bs, len(data_tr))
+
     wandb.init(anonymous="allow", id=args.uid, config=args,
         mode=args.wandb, project="Mini3MRL", entity="apex-lab",
         name=os.path.basename(imle_model_folder(args)),
         resume="allow" if args.continue_run else "never",
         settings=wandb.Settings(code_dir=os.path.dirname(__file__)))
     
-    scheduler = Utils.StepScheduler(optimizer, args.lrs,
-        last_epoch=last_epoch,
-        named_lr_muls={"mapping_net": args.mapping_net_lrmul})
-    loss_fn = nn.BCEWithLogitsLoss()
-    data_tr, data_val = Data.get_data_from_args(args)
-
     tqdm.write(f"---ARGS---\n{Utils.sorted_namespace(args)}\n----------")
     tqdm.write(f"---MODEL---\n{model.module}")
     tqdm.write(f"---OPTIMIZER---\n{optimizer}")
@@ -553,7 +554,6 @@ if __name__ == "__main__":
             expand_factor=args.ipe,
             seed=args.seed + epoch)
         loader = DataLoader(epoch_dataset_expanded,
-            shuffle=False,
             pin_memory=True,
             batch_size=args.bs,
             num_workers=args.num_workers)
