@@ -347,7 +347,6 @@ class EqualizedLinear(nn.Module):
         bias = self.bias * self.b_mul if self.bias is not None else self.bias
         return nn.functional.linear(x, self.weight * self.w_mul, bias)
 
-
 class OneDFakeAdaIN(nn.Module):
     """A mapping net that can accept and ignore a value [x]."""
     

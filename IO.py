@@ -138,13 +138,13 @@ def parser_with_imle_args(P):
         help="Number of layers in AdaIN mapping network")
     P.add_argument("--latent_dim", default=512, type=int,
         help="Latent code dimensionality")
-    P.add_argument("--mapping_net_eqlr", default=1, type=int, choices=[0, 1],
+    P.add_argument("--mapping_net_eqlr", default=0, type=int, choices=[0, 1],
         help="EquilizedLR in mapping net")
     P.add_argument("--mapping_net_act", default="leakyrelu", choices=["relu", "leakyrelu"],
         help="Mapping net activation")
     P.add_argument("--normalize_z", default=1, type=int, choices=[0, 1],
         help="Apply PixelNorm to latent codes")
-    P.add_argument("--mapping_net_lrmul", type=float, default=1,
+    P.add_argument("--mapping_net_lrmul", type=float, default=.01,
         help="Multiplier on mapping net learning rates with respect to those in LRS")
     return P
 
