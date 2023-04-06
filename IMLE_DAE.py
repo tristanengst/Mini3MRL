@@ -538,6 +538,7 @@ if __name__ == "__main__":
 
     cur_step = (last_epoch + 1) * args.ipe * math.ceil(len(data_tr) / args.bs)
     num_steps = args.ipe * math.ceil(len(data_tr) / args.bs)
+    log_iter = max(1, num_steps // 100000)
 
     if not args.eval_iter == 0:
         _ = evaluate(model, data_tr, data_val, scheduler, args, cur_step)
@@ -575,8 +576,10 @@ if __name__ == "__main__":
             model.zero_grad(set_to_none=True)
             cur_step += 1
 
-        # Otherwise the worker threads hang around and cause problems?
-        del loader
+            if cur_step % log_iter == 0:
+                wandb.log({"loss/used/tr": loss.item(),
+                    "epoch": epoch,
+                    "train_step": cur_step}, step=cur_step)
         
         if not args.eval_iter == 0 and (epoch % args.eval_iter == 0
             or epoch == args.epochs - 1):

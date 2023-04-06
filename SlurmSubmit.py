@@ -56,10 +56,8 @@ def get_slurm_args():
         help="Python environment type")
     P.add_argument("--gpu_type", default="a100", choices=["a100", "v100l"],
         help="GPU type")
-    P.add_argument("--mem", default="100G",
+    P.add_argument("--mem", default="adapt",
         help="RAM—specify SLURM argument '100G'")
-    P.add_argument("--force_wandb_offline", choices=[0, 1], type=int, default=1,
-        help="Force WandB offline")
     return P.parse_known_args()
 
 if __name__ == "__main__":
@@ -82,7 +80,19 @@ if __name__ == "__main__":
     else:
         raise NotImplementedError()
 
-    script = f"{file_move_command}\npython {slurm_args.script} {unparse_args(args)} --job_id $SLURM_JOB_ID --num_workers {num_cpus}{' --wandb offline' if slurm_args.force_wandb_offline else ''}"
+    # Host specific settings.
+    if "narval" in os.uname()[1]:
+        args.wandb = "offline"
+        slurm_args.mem = f"{num_gpus*100}GB" if slurm_args.mem == "adapt" else slurm_args.mem
+    elif "cedar" in os.uname()[1]:
+        args.wandb = "online"
+        slurm_args.mem = f"{num_gpus*40}GB" if slurm_args.mem == "adapt" else slurm_args.mem
+    else:
+        args.wandb = "online"
+        if slurm_args.mem == "adapt":
+            raise ValueError()
+
+    script = f"{file_move_command}\npython {slurm_args.script} {unparse_args(args)} --job_id $SLURM_JOB_ID --num_workers {num_cpus}"
 
     if slurm_args.env == "conda":
         env_str = "conda activate py3103MRL"

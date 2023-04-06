@@ -312,6 +312,28 @@ class OneDDataset(Dataset):
 
     def __getitem__(self, idx): return self.X[idx], self.Y[idx]
 
+class ThreeDDataset(Dataset):
+
+    def __init__(self, args):
+        super(TwoDDataset, self).__init__()
+        
+        angle = 2 * math.pi / args.n_way
+        angles = [i * angle for i in range(args.n_way)]
+        vals = [[math.sin(a), math.cos(a)] for a in angles]
+        modes = torch.linalg.norm(torch.tensor(vals), dim=1)
+
+        print(modes)
+
+        datas = [torch.randn(args.n_shot, 3) * .2 + m for m in modes]
+        self.X = torch.cat(data, dim=0)
+        self.Y = torch.repeat_interleave(torch.arange(args.n_way), args.n_shot, dim=0)
+
+
+    def __len__(self): return self.args.n_shot * self.args.n_way
+
+    def __getitem__(self, idx): return self.X[idx], self.Y[idx]
+
+
 class KKMExpandedDataset(Dataset):
     """Dataset such that iterating through it in sequential order is equivalent
     to [expand_factor] passes over [source] while upholding a KKM property.
