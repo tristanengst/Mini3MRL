@@ -53,6 +53,15 @@ def with_noise(x, std=.8, seed=None):
         noise.normal_(generator=torch.Generator(x.device).manual_seed(seed))
         return x + noise * std
 
+def tensor_sample(*shape, seed=0, distribution="normal", device=device):
+    noise = torch.zeros(*shape, device=device)
+    if distribution == "normal":
+        noise.normal_(generator=torch.Generator(device).manual_seed(seed))
+    else:
+        raise NotImplementedError()
+    return noise
+
+
 def save_code_under_folder(folder):
     """Saves the code in the current working directory under [folder] if they
     have not already been saved there. For now, all code files are expected

@@ -1,4 +1,6 @@
+import argparse
 from collections import defaultdict
+import math
 import numpy as np
 import os
 import torch
@@ -313,23 +315,27 @@ class OneDDataset(Dataset):
     def __getitem__(self, idx): return self.X[idx], self.Y[idx]
 
 class ThreeDDataset(Dataset):
+    """An n-way n-shot dataset given by a mixture of Gaussians with modes
+    distributed as sparsely as possible on the unit circle. The index of each
+    mode gives its examples' class.
 
+    Most of the variance is in the first two dimensions of each example.
+    """
     def __init__(self, args):
-        super(TwoDDataset, self).__init__()
-        
+        super(ThreeDDataset, self).__init__()
+        self.args = args
         angle = 2 * math.pi / args.n_way
         angles = [i * angle for i in range(args.n_way)]
         vals = [[math.sin(a), math.cos(a)] for a in angles]
-        modes = torch.linalg.norm(torch.tensor(vals), dim=1)
-
-        print(modes)
-
-        datas = [torch.randn(args.n_shot, 3) * .2 + m for m in modes]
-        self.X = torch.cat(data, dim=0)
+        modes = torch.nn.functional.normalize(torch.tensor(vals), dim=1)
+        modes = torch.cat([modes, torch.zeros(args.n_way, 1)], dim=1)
+        datas = [Utils.tensor_sample(args.n_shot, 3, seed=args.seed, distribution="normal", device=modes.device) * .4 + m for m in modes]
+        self.X = torch.cat(datas, dim=0)
         self.Y = torch.repeat_interleave(torch.arange(args.n_way), args.n_shot, dim=0)
 
-
     def __len__(self): return self.args.n_shot * self.args.n_way
+
+    def __str__(self): return f"{self.__class__.__name__} [n_way={self.args.n_way} n_shot={self.args.n_shot}]"
 
     def __getitem__(self, idx): return self.X[idx], self.Y[idx]
 
