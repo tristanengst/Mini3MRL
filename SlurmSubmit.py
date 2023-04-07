@@ -86,7 +86,7 @@ if __name__ == "__main__":
         slurm_args.mem = f"{num_gpus*100}GB" if slurm_args.mem == "adapt" else slurm_args.mem
     elif "cedar" in os.uname()[1]:
         args.wandb = "online"
-        slurm_args.mem = f"{num_gpus*40}GB" if slurm_args.mem == "adapt" else slurm_args.mem
+        slurm_args.mem = f"{num_gpus*45}GB" if slurm_args.mem == "adapt" else slurm_args.mem
     else:
         args.wandb = "online"
         if slurm_args.mem == "adapt":

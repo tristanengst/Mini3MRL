@@ -575,11 +575,6 @@ if __name__ == "__main__":
             optimizer.step()
             model.zero_grad(set_to_none=True)
             cur_step += 1
-
-            if cur_step % log_iter == 0:
-                wandb.log({"loss/used/tr": loss.item(),
-                    "epoch": epoch,
-                    "train_step": cur_step}, step=cur_step)
         
         if not args.eval_iter == 0 and (epoch % args.eval_iter == 0
             or epoch == args.epochs - 1):

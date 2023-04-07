@@ -20,6 +20,52 @@ def get_model(args, imle=False, **kwargs):
     else:
         raise NotImplementedError()
 
+
+class MLPCatLinearFusion(nn.Module):
+
+    def __init__(self, args):
+        super(MLPCatLinearFusion, self).__init__()
+        self.args = args
+        self.feat_dim = args.feat_dim
+        self.normalize_z = args.normalize_z
+        self.mapping_net_h_dim = args.mapping_net_h_dim
+        self.mapping_net_layers = args.mapping_net_layers
+        self.latent_dim = args.latent_dim
+        self.adain_x_norm = args.adain_x_norm
+
+        layers = []
+        if args.normalize_z:
+            layers.append(("normalize_z", PixelNormLayer(epsilon=0)))
+        layers.append(("mapping_net", MLP(in_dim=args.latent_dim,
+            h_dim=args.mapping_net_h_dim,
+            layers=args.mapping_net_layers,
+            out_dim=args.feat_dim * 2,
+            act_type=args.mapping_net_act,
+            equalized_lr=args.mapping_net_eqlr,
+            end_with_act=False)))
+
+        self.model = nn.Sequential(OrderedDict(layers))
+        self.fusion_layer = nn.Linear(self.feat_dim * 2, self.feat_dim)
+
+    def get_z_stats(self, num_z=2048, device="cpu"):
+        """Returns the mean shift and scale used in the AdaIN, with the mean
+        taken over [num_z] different latent codes.
+        """
+        with torch.no_grad():
+            z = self.model(get_codes(num_z, self.latent_dim, device=device))
+            z_shift, z_scale = z[:, :self.feat_dim], z[:, self.feat_dim:]
+            return torch.mean(z_shift, dim=0), torch.std(z_shift, dim=0), torch.mean(z_scale, dim=0), torch.std(z_scale, dim=0)
+
+    def forward(self, x, z):
+        return self.fusion_layer(torch.cat([x, self.model(z)], dim=1))
+
+def get_fusion(args, ignore_latents=False):
+    if args.fusion == "adain":
+        return IgnoreLatentAdaIN(args) if ignore_latents else AdaIN(args)
+    elif args.fusion == "mlp_cat_linear":
+        return nn
+    
+
 class MLP(nn.Module):
     def __init__(self, in_dim, h_dim=256, out_dim=42, layers=2, 
         act_type="leakyrelu", equalized_lr=False, end_with_act=True):
