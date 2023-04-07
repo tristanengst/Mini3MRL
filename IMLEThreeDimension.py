@@ -89,7 +89,7 @@ def evaluate(model, data_tr, data_val, scheduler, args, cur_step, nxz_data_tr=No
         tqdm.write(f"Computed epoch as {epoch} so not probing")
         probe_results = {}
 
-    wandb.log({
+    wandb.log(probe_results | {
         "loss/min/tr": loss_tr_min,
         "loss/mean/tr": loss_tr_mean,
         "lr": scheduler.get_lr(),
@@ -272,7 +272,7 @@ def get_args(args=None):
 
     args = P.parse_args() if args is None else P.parse_args(args)
     args.uid = wandb.util.generate_id() if args.uid is None else args.uid
-    args.script = "1D_imle" if args.script is None else args.script
+    args.script = "3D_imle" if args.script is None else args.script
     args.data_tr, args.data_val = "1D", "1D"
     args.lrs = Utils.StepScheduler.process_lrs(args.lrs)
     args.probe_lrs = Utils.StepScheduler.process_lrs(args.probe_lrs)
