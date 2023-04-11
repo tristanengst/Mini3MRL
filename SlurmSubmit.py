@@ -54,8 +54,8 @@ def get_slurm_args():
         help="Zero-indexed index of last chunk to run, (ie. 9 to run 10 chunks")
     P.add_argument("--env", default="conda", choices=["conda", "pip"],
         help="Python environment type")
-    P.add_argument("--gpu_type", default="a100", choices=["a100", "v100l"],
-        help="GPU type")
+    P.add_argument("--gpu_type", default="adapt", choices=["a100", "v100l", "adapt"],
+        help="GPU type. 'adapt' to set adaptively")
     P.add_argument("--mem", default="adapt",
         help="RAM—specify SLURM argument '100G'")
     return P.parse_known_args()
@@ -84,9 +84,11 @@ if __name__ == "__main__":
     if "narval" in os.uname()[1]:
         args.wandb = "offline"
         slurm_args.mem = f"{num_gpus*100}GB" if slurm_args.mem == "adapt" else slurm_args.mem
+        slurm_args.gpu_type = "a100" if slurm_args.gpu_type == "adapt" else slurm_args.gpu_type
     elif "cedar" in os.uname()[1]:
         args.wandb = "online"
         slurm_args.mem = f"{num_gpus*45}GB" if slurm_args.mem == "adapt" else slurm_args.mem
+        slurm_args.gpu_type = "v100l" if slurm_args.gpu_type == "adapt" else slurm_args.gpu_type
     else:
         args.wandb = "online"
         if slurm_args.mem == "adapt":
