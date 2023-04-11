@@ -484,6 +484,9 @@ def get_args(args=None):
     args.lrs = Utils.StepScheduler.process_lrs(args.lrs)
     args.probe_lrs = Utils.StepScheduler.process_lrs(args.probe_lrs)
 
+    if not args.probe_linear and not args.probe_mlp:
+        tqdm.write(f"---------\nWARNING: Will not conduct any probes.\n---------")
+
     if not args.probe_trials == 1:
         raise NotImplementedError(f"Running multiple probe trials is currently not supported in a script that logs to WandB.")
     return args
