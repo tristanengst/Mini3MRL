@@ -20,6 +20,14 @@ def get_model(args, imle=False, **kwargs):
     else:
         raise NotImplementedError()
 
+def get_loss_fn(args, reduction="mean"):
+    """Returns the loss function given by [args] with reduction [reduction]."""
+    if args.loss == "bce":
+        return nn.BCEWithLogitsLoss(reduction=reduction)
+    elif args.loss == "mse":
+        return nn.MSELoss(reduction=reduction)
+    else:
+        raise NotImplementedError()
 
 class MLPCatLinearFusion(nn.Module):
 
@@ -59,12 +67,7 @@ class MLPCatLinearFusion(nn.Module):
     def forward(self, x, z):
         return self.fusion_layer(torch.cat([x, self.model(z)], dim=1))
 
-def get_fusion(args, ignore_latents=False):
-    if args.fusion == "adain":
-        return IgnoreLatentAdaIN(args) if ignore_latents else AdaIN(args)
-    elif args.fusion == "mlp_cat_linear":
-        return nn
-    
+
 
 class MLP(nn.Module):
     def __init__(self, in_dim, h_dim=256, out_dim=42, layers=2, 
@@ -146,7 +149,7 @@ class IMLE_DAE_MLP(nn.Module):
         self.ignore_latents = ignore_latents
         self.encoder = MLPEncoder(in_dim=self.in_out_dim, **vars(args))
         self.decoder = MLPDecoder(out_dim=self.in_out_dim, **vars(args))
-        self.ada_in = IgnoreLatentAdaIN(args) if ignore_latents else AdaIN(args)
+        self.ada_in = get_fusion(args)
         self.feat_dim = args.feat_dim
         self.latent_dim = args.latent_dim
 
@@ -393,6 +396,52 @@ class EqualizedLinear(nn.Module):
         bias = self.bias * self.b_mul if self.bias is not None else self.bias
         return nn.functional.linear(x, self.weight * self.w_mul, bias)
 
+class TrueAdaIN(nn.Module):
+
+    def __init__(self, args):
+        super(TrueAdaIN, self).__init__()
+        self.args = args
+        self.feat_dim = args.feat_dim
+        self.normalize_z = args.normalize_z
+        self.mapping_net_h_dim = args.mapping_net_h_dim
+        self.mapping_net_layers = args.mapping_net_layers
+        self.latent_dim = args.latent_dim
+
+        layers = []
+        if args.normalize_z:
+            layers.append(("normalize_z", PixelNormLayer(epsilon=0)))
+        layers.append(("mapping_net", MLP(in_dim=args.latent_dim,
+            h_dim=args.mapping_net_h_dim,
+            layers=args.mapping_net_layers,
+            out_dim=args.feat_dim * 2,
+            act_type=args.mapping_net_act,
+            equalized_lr=args.mapping_net_eqlr,
+            end_with_act=False)))
+
+        self.model = nn.Sequential(OrderedDict(layers))
+
+    def get_z_stats(self, num_z=2048, device="cpu"):
+        """Returns the mean shift and scale used in the AdaIN, with the mean
+        taken over [num_z] different latent codes.
+        """
+        with torch.no_grad():
+            z = self.model(get_codes(num_z, self.latent_dim, device=device))
+            z_shift, z_scale = z[:, :self.feat_dim], z[:, self.feat_dim:]
+            return torch.mean(z_shift, dim=0), torch.std(z_shift, dim=0), torch.mean(z_scale, dim=0), torch.std(z_scale, dim=0)
+
+    def forward(self, x, z):
+        """
+        Args:
+        x   -- NxD image features
+        z   -- (N*k)xCODE_DIM latent codes
+        """
+        z = self.model(z)
+        z_shift = torch.mean(z[:, :self.feat_dim], dim=1, keepdim=True)
+        z_scale = torch.std(z[:, self.feat_dim:], dim=1, keepdim=True)
+        x = torch.repeat_interleave(x, z.shape[0] // x.shape[0], dim=0)
+        x_normalized = (x - torch.mean(x, dim=1, keepdim=True)) / torch.std(x, dim=1, keepdim=True)
+        return z_scale * x_normalized + z_shift
+
 class OneDFakeAdaIN(nn.Module):
     """A mapping net that can accept and ignore a value [x]."""
     
@@ -444,3 +493,10 @@ class IMLEOneDBasic(nn.Module):
         fx = self.a * x + self.b
         fx = torch.repeat_interleave(fx, z.shape[0] // x.shape[0], dim=0)
         return fx + self.ada_in(z)
+
+def get_fusion(args, ignore_latents=False):
+    if args.fusion == "adain":
+        return IgnoreLatentAdaIN(args) if ignore_latents else AdaIN(args)
+    elif args.fusion == "true_adain":
+        return TrueAdaIN(args)
+    

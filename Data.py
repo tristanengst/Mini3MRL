@@ -64,20 +64,30 @@ def min_max_normalization(tensor, min_value, max_value):
     return tensor
 
 def get_transforms_tr(args):
-    if args.data_tr == "mnist":
+    if args.data_tr == "mnist" and args.loss == "bce":
         return transforms.Compose([
             transforms.Lambda(lambda x: min_max_normalization(x, 0, 1)),
             transforms.Lambda(lambda x: torch.round(x)),
+            TwoDToThreeDTransform()
+        ])
+    elif args.data_tr == "mnist" and args.loss == "mse":
+        return transforms.Compose([
+            transforms.Lambda(lambda x: min_max_normalization(x, 0, 1)),
             TwoDToThreeDTransform()
         ])
     else:
         raise NotImplementedError()
 
 def get_transforms_te(args):
-    if args.data_tr == "mnist":
+    if args.data_tr == "mnist" and args.loss == "bce":
         return transforms.Compose([
             transforms.Lambda(lambda x: min_max_normalization(x, 0, 1)),
             transforms.Lambda(lambda x: torch.round(x)),
+            TwoDToThreeDTransform()
+        ])
+    elif args.data_tr == "mnist" and args.loss == "mse":
+        return transforms.Compose([
+            transforms.Lambda(lambda x: min_max_normalization(x, 0, 1)),
             TwoDToThreeDTransform()
         ])
     else:

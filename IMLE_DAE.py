@@ -53,12 +53,12 @@ def evaluate(model, data_tr, data_val, scheduler, args, cur_step, nxz_data_tr=No
     if nxz_data_tr is None:
         nxz_data_tr = ImageLatentDataset.get_image_latent_dataset(
             model=model,
-            loss_fn=nn.BCEWithLogitsLoss(reduction="none"),
+            loss_fn=Models.get_loss_fn(args, reduction="none"),
             dataset=data_tr,
             args=args)
     nxz_data_val = ImageLatentDataset.get_image_latent_dataset(
         model=model,
-        loss_fn=nn.BCEWithLogitsLoss(reduction="none"),
+        loss_fn=Models.get_loss_fn(args, reduction="none"),
         dataset=data_val,
         args=args)
 
@@ -298,7 +298,7 @@ class ImageLatentDataset(Dataset):
                 
                 output[start_idx:stop_idx, 3:] = model(nx, num_z=num_samples, seed=latents_seed).view(len(data), num_samples, *nxz_data[0][2].shape).cpu()
 
-        return Utils.images_to_pil_image(output)
+        return Utils.images_to_pil_image(output, sigmoid=(args.loss == "bce"))
 
     @staticmethod
     def eval_model(nxz_data, model, args, loss_fn=None, use_sampled_codes=True):
@@ -314,7 +314,7 @@ class ImageLatentDataset(Dataset):
                                 expected loss)
         """
         loss, total = 0, 0
-        loss_fn = nn.BCEWithLogitsLoss(reduction="mean") if loss_fn is None else loss_fn
+        loss_fn = Models.get_loss_fn(args, reduction="mean") if loss_fn is None else loss_fn
         with torch.no_grad():
             loader = DataLoader(nxz_data,
                 batch_size=args.code_bs,
@@ -520,7 +520,7 @@ if __name__ == "__main__":
     scheduler = Utils.StepScheduler(optimizer, args.lrs,
         last_epoch=last_epoch,
         named_lr_muls={"mapping_net": args.mapping_net_lrmul})
-    loss_fn = nn.BCEWithLogitsLoss()
+    loss_fn = Models.get_loss_fn(args)
     data_tr, data_val = Data.get_data_from_args(args)
     args.bs = min(args.bs, len(data_tr))
 
@@ -551,7 +551,7 @@ if __name__ == "__main__":
 
         epoch_dataset = ImageLatentDataset.get_image_latent_dataset(
             model=model,
-            loss_fn=nn.BCEWithLogitsLoss(reduction="none"),
+            loss_fn=Models.get_loss_fn(args, reduction="none"),
             dataset=data_tr,
             args=args)
         epoch_dataset_expanded = Data.KKMExpandedDataset(epoch_dataset,

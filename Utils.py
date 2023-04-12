@@ -170,7 +170,7 @@ def hierararchical_hasattr(obj, attrs_list):
             return False
     return True
 
-def images_to_pil_image(images):
+def images_to_pil_image(images, sigmoid=True):
     """Returns tensor datastructure [images] as a PIL image that can thus be
     easily saved.
 
@@ -186,8 +186,9 @@ def images_to_pil_image(images):
 
     # We need this because we use BCEWithLogitsLoss and don't put nn.Sigmoid at
     # the end of our model. This visually represents model confidence in respect
-    # to loss.
-    images = torch.sigmoid(images)
+    # to loss. Note that if we use MSELoss, we should set sigmoid=False and not
+    # do this.
+    images = torch.sigmoid(images) if sigmoid else images 
 
     fig, axs = plt.subplots(ncols=max([len(image_row) for image_row in images]),
         nrows=len(images),

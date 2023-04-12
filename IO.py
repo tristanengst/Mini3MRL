@@ -98,6 +98,8 @@ def parser_with_training_args(P):
         help="Weight decay on generative task")
     P.add_argument("--zero_half_target", choices=[0, 1, 2], default=0, type=int,
         help="Whether half the target (bottom or top, randomly) should be zeroed out")
+    P.add_argument("--loss", choices=["bce", "mse"], default="bce",
+        help="Loss function")
     return P
 
 def parser_with_probe_args(P):
@@ -144,5 +146,7 @@ def parser_with_imle_args(P):
         help="Apply PixelNorm to latent codes")
     P.add_argument("--mapping_net_lrmul", type=float, default=.01,
         help="Multiplier on mapping net learning rates with respect to those in LRS")
+    P.add_argument("--fusion", default="adain", choices=["adain", "true_adain"],
+        help="Latent code fusion method")
     return P
 
