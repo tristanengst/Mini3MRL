@@ -70,22 +70,22 @@ class MLPCatLinearFusion(nn.Module):
 
 
 class MLP(nn.Module):
-    def __init__(self, in_dim, h_dim=256, out_dim=42, layers=2, 
+    def __init__(self, in_dim, h_dim=256, out_dim=42, layers=2, lrmul=0.01,
         act_type="leakyrelu", equalized_lr=False, end_with_act=True):
         super(MLP, self).__init__()
 
         if layers == 1 and end_with_act:
             self.model = nn.Sequential(
-                get_lin_layer(in_dim, out_dim, equalized_lr=equalized_lr),
+                get_lin_layer(in_dim, out_dim, equalized_lr=equalized_lr, lrmul=lrmul),
                 get_act(act_type))
         elif layers == 1 and not end_with_act:
             self.model = get_lin_layer(in_dim, out_dim,
                 equalized_lr=equalized_lr)
         elif layers > 1:
-            layer1 = get_lin_layer(in_dim, h_dim, equalized_lr=equalized_lr)
-            mid_layers = [get_lin_layer(h_dim, h_dim, equalized_lr=equalized_lr)
+            layer1 = get_lin_layer(in_dim, h_dim, equalized_lr=equalized_lr, lrmul=lrmul)
+            mid_layers = [get_lin_layer(h_dim, h_dim, equalized_lr=equalized_lr, lrmul=lrmul)
                 for _ in range(layers - 2)]
-            layerN = get_lin_layer(h_dim, out_dim, equalized_lr=equalized_lr)
+            layerN = get_lin_layer(h_dim, out_dim, equalized_lr=equalized_lr, lrmul=lrmul)
             linear_layers = [layer1] + mid_layers + [layerN]
 
             layers = []

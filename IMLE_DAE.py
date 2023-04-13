@@ -519,7 +519,7 @@ if __name__ == "__main__":
 
     scheduler = Utils.StepScheduler(optimizer, args.lrs,
         last_epoch=last_epoch,
-        named_lr_muls={"mapping_net": args.mapping_net_lrmul})
+        named_lr_muls={"mapping_net": 1 if args.mapping_net_eqlr else args.mapping_net_lrmul})
     loss_fn = Models.get_loss_fn(args)
     data_tr, data_val = Data.get_data_from_args(args)
     args.bs = min(args.bs, len(data_tr))
