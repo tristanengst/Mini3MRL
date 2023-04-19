@@ -486,7 +486,8 @@ def get_args(args=None):
 
     if not args.probe_linear and not args.probe_mlp:
         tqdm.write(f"---------\nWARNING: Will not conduct any probes.\n---------")
-
+    if not args.bottleneck_layers == 1:
+        raise ValueError()
     if not args.probe_trials == 1:
         raise NotImplementedError(f"Running multiple probe trials is currently not supported in a script that logs to WandB.")
     return args

@@ -100,6 +100,8 @@ def parser_with_training_args(P):
         help="Whether half the target (bottom or top, randomly) should be zeroed out")
     P.add_argument("--loss", choices=["bce", "mse"], default="bce",
         help="Loss function")
+    P.add_argument("--bottleneck_layers", default=1, type=int,
+        help="Number of linear/activation layers in bottlneck")
     return P
 
 def parser_with_probe_args(P):
@@ -138,7 +140,7 @@ def parser_with_imle_args(P):
         help="Number of layers in AdaIN mapping network")
     P.add_argument("--latent_dim", default=512, type=int,
         help="Latent code dimensionality")
-    P.add_argument("--mapping_net_eqlr", default=0, type=int, choices=[0, 1],
+    P.add_argument("--mapping_net_eqlr", default=1, type=int, choices=[0, 1],
         help="EquilizedLR in mapping net")
     P.add_argument("--mapping_net_act", default="leakyrelu", choices=["relu", "leakyrelu"],
         help="Mapping net activation")
@@ -148,5 +150,7 @@ def parser_with_imle_args(P):
         help="Multiplier on mapping net learning rates with respect to those in LRS")
     P.add_argument("--fusion", default="adain", choices=["adain", "true_adain"],
         help="Latent code fusion method")
+    P.add_argument("--adain_x_mod", default="linear", choices=["linear", "none"],
+        help="How features are transformed in AdaIN prior to possibly norm")
     return P
 

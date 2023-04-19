@@ -34,7 +34,9 @@ class MLP(nn.Module):
         act_type="leakyrelu", equalized_lr=False, end_with_act=True):
         super(MLP, self).__init__()
 
-        if layers == 1 and end_with_act:
+        if layers == 0:
+            self.model = nn.Identity()
+        elif layers == 1 and end_with_act:
             self.model = nn.Sequential(
                 get_lin_layer(in_dim, out_dim, equalized_lr=equalized_lr, lrmul=lrmul),
                 get_act(act_type))
@@ -95,9 +97,15 @@ class DAE_MLP(nn.Module):
     def __init__(self, args):
         super(DAE_MLP, self).__init__()
         self.encoder = MLPEncoder(**vars(args))
+        self.bottlneck = MLP(in_dim=args.feat_dim, 
+            out_dim=args.feat_dim,
+            layers=args.bottleneck_layers,
+            equalized_lr=False,
+            act_type="relu",
+            end_with_act=True)
         self.decoder = MLPDecoder(**vars(args))
     
-    def forward(self, x): return self.decoder(self.encoder(x)).view(*x.shape)
+    def forward(self, x): return self.decoder(self.bottleneck(self.encoder(x))).view(*x.shape)
 
 
 class IMLE_DAE_MLP(nn.Module):
@@ -236,8 +244,11 @@ class AdaIN(nn.Module):
 
         self.model = nn.Sequential(OrderedDict(layers))
 
-        self.x_modification_layer = nn.Linear(self.feat_dim, self.feat_dim)
-
+        if args.x_modification_layer == "linear":
+            self.x_modification_layer = nn.Linear(self.feat_dim, self.feat_dim)
+        else:
+            self.x_modification_layer = nn.Identity()
+            
         if args.adain_x_norm == "none":
             self.x_norm_layer = nn.Identity()
         elif args.adain_x_norm == "norm":
