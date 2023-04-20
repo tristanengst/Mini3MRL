@@ -13,6 +13,8 @@ def get_model(args, imle=False, **kwargs):
     """
     if args.arch == "mlp" and imle:
         return IMLE_DAE_MLP(args, **kwargs)
+    elif args.arch == "conv" and imle:
+        return IMLE_DAE_Conv(args, **kwargs)
     elif args.arch == "1dbasic" and imle:
         return IMLEOneDBasic(args, **kwargs)
     elif args.arch == "mlp" and not imle:
@@ -155,6 +157,82 @@ class IMLE_DAE_MLP(nn.Module):
         ignore_latent_imle_dae_mlp.load_state_dict(self.state_dict(), strict=False)
         return ignore_latent_imle_dae_mlp
 
+class ConvEncoder(nn.Module):
+    def __init__(self, feat_dim=256, hidden_channels=32, **kwargs):
+        super(ConvEncoder, self).__init__()
+        self.feat_dim = feat_dim
+        self.model = nn.Sequential(
+            nn.Conv2d(3, hidden_channels, 3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(hidden_channels, hidden_channels, 3, padding=1), 
+            nn.ReLU(inplace=True),
+            nn.Conv2d(hidden_channels, 2*hidden_channels, 3, padding=1, stride=2),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(2*hidden_channels, 2*hidden_channels, 3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(2*hidden_channels, 4*hidden_channels, 3, padding=1, stride=2),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(4*hidden_channels, 4*hidden_channels, 3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Flatten(),
+            nn.Linear(256 * hidden_channels, feat_dim), # harcoded for 32x32 inputs
+            nn.ReLU(inplace=True)
+        )
+
+    def forward(self, x): return self.model(x)
+
+class ConvDecoder(nn.Module):
+    def __init__(self, feat_dim=256, hidden_channels=32, **kwargs):
+        super(ConvDecoder, self).__init__()
+        self.feat_dim = feat_dim
+        self.model = nn.Sequential(
+            nn.Linear(feat_dim, 4*hidden_channels*8*8),
+            nn.ReLU(inplace=True),
+            ReshapeLayer(shape=(-1, 4*hidden_channels, 8, 8)),
+            nn.ConvTranspose2d(4*hidden_channels, 4*hidden_channels, 3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.ConvTranspose2d(4*hidden_channels, 2*hidden_channels, 3, padding=1, stride=2, output_padding=1),
+            nn.ReLU(inplace=True),
+            nn.ConvTranspose2d(2*hidden_channels, 2*hidden_channels, 3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.ConvTranspose2d(2*hidden_channels, hidden_channels, 3, padding=1, stride=2, output_padding=1),
+            nn.ReLU(inplace=True),
+            nn.ConvTranspose2d(hidden_channels, hidden_channels, 3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.ConvTranspose2d(hidden_channels, 3, 3, padding=1))
+
+    def forward(self, x): return self.model(x)
+
+class IMLE_DAE_Conv(nn.Module):
+    """Adapted from https://blog.paperspace.com/convolutional-autoencoder/."""
+    def __init__(self, args, **kwargs):
+        super(IMLE_DAE_Conv, self).__init__()
+        self.args = args
+        self.encoder = ConvEncoder(**vars(args))
+        self.decoder = ConvDecoder(**vars(args))
+        self.ada_in = get_fusion(args)
+        self.feat_dim = args.feat_dim
+        self.latent_dim = args.latent_dim
+
+    def get_codes(self, bs, device="cpu", seed=None):
+        if seed is None:
+            return torch.randn(bs, self.latent_dim, device=device)
+        else:
+            z = torch.zeros(bs, self.latent_dim, device=device)
+            z.normal_(generator=torch.Generator(device).manual_seed(seed))
+            return z
+    
+    def forward(self, x, z=None, num_z=1, seed=None):
+        if z is None:
+            z = self.get_codes(len(x) * num_z, device=x.device, seed=seed)
+        fx = self.decoder(self.ada_in(self.encoder(x), z))
+        return fx.view(len(z), * x.shape[1:])
+
+    def to_encoder_with_ada_in(self, use_mean_representation=False):
+        return EncoderWithAdaIn(self.encoder, self.ada_in,
+            use_mean_representation=use_mean_representation)
+
+
 def get_codes(bs, code_dim, device="cpu", seed=None):
     """Returns [bs] latent codes to be passed into the model.
 
@@ -244,7 +322,7 @@ class AdaIN(nn.Module):
 
         self.model = nn.Sequential(OrderedDict(layers))
 
-        if args.x_modification_layer == "linear":
+        if args.adain_x_mod == "linear":
             self.x_modification_layer = nn.Linear(self.feat_dim, self.feat_dim)
         else:
             self.x_modification_layer = nn.Identity()
@@ -367,6 +445,13 @@ class EqualizedLinear(nn.Module):
     def forward(self, x):
         bias = self.bias * self.b_mul if self.bias is not None else self.bias
         return nn.functional.linear(x, self.weight * self.w_mul, bias)
+
+class ReshapeLayer(nn.Module):
+    def __init__(self, shape):
+        super(ReshapeLayer, self).__init__()
+        self.shape = shape
+    
+    def forward(self, x): return x.view(*self.shape)
 
 class TrueAdaIN(nn.Module):
 

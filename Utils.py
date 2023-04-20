@@ -45,7 +45,7 @@ def matrix_to_stats(m, matrix_name=""):
         f"weights/{matrix_name}norm": torch.linalg.norm(m) / (m.view(-1).shape[0] ** .5),
     }
 
-def with_noise(x, std=.8, seed=None):
+def with_noise(x, std=.8, seed=None, mask=False):
     if seed is None:
         return x + torch.randn(*x.shape, device=x.device) * std
     else:
@@ -170,7 +170,7 @@ def hierararchical_hasattr(obj, attrs_list):
             return False
     return True
 
-def images_to_pil_image(images, sigmoid=True):
+def images_to_pil_image(images, sigmoid=True, color=False):
     """Returns tensor datastructure [images] as a PIL image that can thus be
     easily saved.
 

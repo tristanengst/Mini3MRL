@@ -76,7 +76,7 @@ def parser_with_data_args(P):
     return P
 
 def parser_with_training_args(P):
-    P.add_argument("--arch", choices=["mlp", "1dbasic"], default="mlp",
+    P.add_argument("--arch", choices=["mlp", "1dbasic", "conv"], default="mlp",
         help="Model architecture")
     P.add_argument("--feat_dim", type=int, default=64,
         help="Dimensionality of the features extracted by the model")
@@ -98,7 +98,7 @@ def parser_with_training_args(P):
         help="Weight decay on generative task")
     P.add_argument("--zero_half_target", choices=[0, 1, 2], default=0, type=int,
         help="Whether half the target (bottom or top, randomly) should be zeroed out")
-    P.add_argument("--loss", choices=["bce", "mse"], default="bce",
+    P.add_argument("--loss", choices=["bce", "mse"], default="mse",
         help="Loss function")
     P.add_argument("--bottleneck_layers", default=1, type=int,
         help="Number of linear/activation layers in bottlneck")
@@ -146,7 +146,7 @@ def parser_with_imle_args(P):
         help="Mapping net activation")
     P.add_argument("--normalize_z", default=1, type=int, choices=[0, 1],
         help="Apply PixelNorm to latent codes")
-    P.add_argument("--mapping_net_lrmul", type=float, default=.01,
+    P.add_argument("--mapping_net_lrmul", type=float, default=1e-5,
         help="Multiplier on mapping net learning rates with respect to those in LRS")
     P.add_argument("--fusion", default="adain", choices=["adain", "true_adain"],
         help="Latent code fusion method")

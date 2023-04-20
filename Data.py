@@ -75,6 +75,11 @@ def get_transforms_tr(args):
             transforms.Lambda(lambda x: min_max_normalization(x, 0, 1)),
             TwoDToThreeDTransform()
         ])
+    elif args.data_tr == "cifar10":
+        return transforms.Compose([
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomResizedCrop(32, scale=(0.75, 1.0), ratio=(0.75, 4/3))
+        ])
     else:
         raise NotImplementedError()
 
@@ -90,6 +95,8 @@ def get_transforms_te(args):
             transforms.Lambda(lambda x: min_max_normalization(x, 0, 1)),
             TwoDToThreeDTransform()
         ])
+    elif args.data_tr == "cifar10":
+        return nn.Identity()
     else:
         raise NotImplementedError()
 
@@ -147,7 +154,9 @@ def get_fewshot_dataset(dataset, n_way=-1, n_shot=-1, classes=None, seed=0,
                 raise e
     
         indices = Utils.flatten([idxs for idxs in class2idxs.values()])
-        return ImageFolderSubset(dataset, indices=indices)
+        return ImageFolderSubset(dataset,
+            indices=indices,
+            in_memory=dataset.in_memory if hasattr(dataset, "in_memory") else False)
 
 class ImageFolderSubset(Dataset):
     """Subset of an ImageFolder that preserves key attributes. Besides
@@ -240,7 +249,7 @@ class ImageFolderSubset(Dataset):
         self.n_way = len(self.class2idx)
         self.n_shot = len(self.samples) // self.n_way # This is an average
         
-    def __str__(self): return f"{self.__class__.__name__} [root={self.root} length={self.__len__()} n_shot={self.n_shot} n_way={self.n_way} transform={self.transform}]"
+    def __str__(self): return f"{self.__class__.__name__} [root={self.root} length={self.__len__()} n_shot={self.n_shot} n_way={self.n_way} transform={self.transform} in_memory={self.in_memory}]"
 
     def __len__(self): return len(self.indices)
 
