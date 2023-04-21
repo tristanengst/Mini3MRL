@@ -94,6 +94,10 @@ def parser_with_training_args(P):
         help="Number of encoder layers")
     P.add_argument("--num_decoder_layers", type=int, default=2,
         help="Number of encoder layers")
+    P.add_argument("--encoder_h_dim", type=int, default=1024,
+        help="Encoder hidden dimension")
+    P.add_argument("--decoder_h_dim", type=int, default=1024,
+        help="Decoder hidden dimension")
     P.add_argument("--wd", type=float, default=1e-5,
         help="Weight decay on generative task")
     P.add_argument("--zero_half_target", choices=[0, 1, 2], default=0, type=int,
@@ -148,7 +152,7 @@ def parser_with_imle_args(P):
         help="Multiplier on mapping net learning rates with respect to those in LRS")
     P.add_argument("--fusion", default="adain", choices=["adain", "true_adain"],
         help="Latent code fusion method")
-    P.add_argument("--adain_x_mod", default="linear", choices=["linear", "none"],
+    P.add_argument("--adain_x_mod", default="none", choices=["linear", "none"],
         help="How features are transformed in AdaIN prior to possibly norm")
     return P
 

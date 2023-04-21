@@ -72,9 +72,9 @@ class MLP(nn.Module):
 
 class MLPEncoder(MLP):
 
-    def __init__(self, in_dim=784, h_dim=1024, feat_dim=64, leaky_relu=False, num_encoder_layers=2, **kwargs):
+    def __init__(self, in_dim=784, encoder_h_dim=1024, feat_dim=64, leaky_relu=False, num_encoder_layers=2, **kwargs):
         super(MLPEncoder, self).__init__(in_dim=in_dim,
-            h_dim=h_dim,
+            h_dim=encoder_h_dim,
             out_dim=feat_dim,
             layers=num_encoder_layers,
             act_type="leakyrelu" if leaky_relu else "relu")
@@ -84,9 +84,9 @@ class MLPEncoder(MLP):
 
 class MLPDecoder(MLP):
 
-    def __init__(self, feat_dim=64, h_dim=1024, out_dim=784, num_decoder_layers=2, **kwargs):
+    def __init__(self, feat_dim=64, decoder_h_dim=1024, out_dim=784, num_decoder_layers=2, **kwargs):
         super(MLPDecoder, self).__init__(in_dim=feat_dim,
-            h_dim=h_dim,
+            h_dim=decoder_h_dim,
             out_dim=out_dim,
             layers=num_decoder_layers,
             act_type="relu",
