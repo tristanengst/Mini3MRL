@@ -100,8 +100,6 @@ def parser_with_training_args(P):
         help="Whether half the target (bottom or top, randomly) should be zeroed out")
     P.add_argument("--loss", choices=["bce", "mse"], default="mse",
         help="Loss function")
-    P.add_argument("--bottleneck_layers", default=1, type=int,
-        help="Number of linear/activation layers in bottlneck")
     return P
 
 def parser_with_probe_args(P):

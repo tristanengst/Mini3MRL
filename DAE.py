@@ -250,7 +250,7 @@ class ImageDataset(Dataset):
                     output[start_idx:stop_idx, 3+j_idx*2] = nx
                     output[start_idx:stop_idx, 4+j_idx*2] = model(nx).cpu()
 
-        return Utils.images_to_pil_image(output)
+        return Utils.images_to_pil_image(output, sigmoid=(args.loss == "bce"))
 
     @staticmethod
     def eval_model(nx_data, model, args, loss_fn=None):
@@ -266,7 +266,7 @@ class ImageDataset(Dataset):
                                 expected loss)
         """
         loss, total = 0, 0
-        loss_fn = nn.BCEWithLogitsLoss(reduction="mean") if loss_fn is None else loss_fn
+        loss_fn = Models.get_loss_fn(args, reduction="mean")
         with torch.no_grad():
             loader = DataLoader(nx_data,
                 batch_size=args.bs,
@@ -377,7 +377,7 @@ if __name__ == "__main__":
         settings=wandb.Settings(code_dir=os.path.dirname(__file__)))
     
     scheduler = Utils.StepScheduler(optimizer, args.lrs, last_epoch=last_epoch)
-    loss_fn = nn.BCEWithLogitsLoss()
+    loss_fn = Models.get_loss_fn(args, reduction="mean")
     data_tr, data_val = Data.get_data_from_args(args)
 
     tqdm.write(f"---ARGS---\n{Utils.sorted_namespace(args)}\n----------")

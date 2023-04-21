@@ -99,15 +99,9 @@ class DAE_MLP(nn.Module):
     def __init__(self, args):
         super(DAE_MLP, self).__init__()
         self.encoder = MLPEncoder(**vars(args))
-        self.bottlneck = MLP(in_dim=args.feat_dim, 
-            out_dim=args.feat_dim,
-            layers=args.bottleneck_layers,
-            equalized_lr=False,
-            act_type="relu",
-            end_with_act=True)
         self.decoder = MLPDecoder(**vars(args))
     
-    def forward(self, x): return self.decoder(self.bottleneck(self.encoder(x))).view(*x.shape)
+    def forward(self, x): return self.decoder(self.encoder(x)).view(*x.shape)
 
 
 class IMLE_DAE_MLP(nn.Module):
@@ -214,6 +208,12 @@ class IMLE_DAE_Conv(nn.Module):
         self.feat_dim = args.feat_dim
         self.latent_dim = args.latent_dim
 
+    def forward(self, x, z=None, num_z=1, seed=None):
+        if z is None:
+            z = self.get_codes(len(x) * num_z, device=x.device, seed=seed)
+        fx = self.decoder(self.ada_in(self.encoder(x), z))
+        return fx.view(len(z), * x.shape[1:])
+
     def get_codes(self, bs, device="cpu", seed=None):
         if seed is None:
             return torch.randn(bs, self.latent_dim, device=device)
@@ -222,12 +222,6 @@ class IMLE_DAE_Conv(nn.Module):
             z.normal_(generator=torch.Generator(device).manual_seed(seed))
             return z
     
-    def forward(self, x, z=None, num_z=1, seed=None):
-        if z is None:
-            z = self.get_codes(len(x) * num_z, device=x.device, seed=seed)
-        fx = self.decoder(self.ada_in(self.encoder(x), z))
-        return fx.view(len(z), * x.shape[1:])
-
     def to_encoder_with_ada_in(self, use_mean_representation=False):
         return EncoderWithAdaIn(self.encoder, self.ada_in,
             use_mean_representation=use_mean_representation)
