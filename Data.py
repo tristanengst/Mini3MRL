@@ -68,12 +68,10 @@ def get_transforms_tr(args):
         return transforms.Compose([
             transforms.Lambda(lambda x: min_max_normalization(x, 0, 1)),
             transforms.Lambda(lambda x: torch.round(x)),
-            TwoDToThreeDTransform()
         ])
     elif args.data_tr == "mnist" and args.loss == "mse":
         return transforms.Compose([
             transforms.Lambda(lambda x: min_max_normalization(x, 0, 1)),
-            TwoDToThreeDTransform()
         ])
     elif args.data_tr == "cifar10":
         return transforms.Compose([
@@ -88,23 +86,15 @@ def get_transforms_te(args):
         return transforms.Compose([
             transforms.Lambda(lambda x: min_max_normalization(x, 0, 1)),
             transforms.Lambda(lambda x: torch.round(x)),
-            TwoDToThreeDTransform()
         ])
     elif args.data_tr == "mnist" and args.loss == "mse":
         return transforms.Compose([
             transforms.Lambda(lambda x: min_max_normalization(x, 0, 1)),
-            TwoDToThreeDTransform()
         ])
     elif args.data_tr == "cifar10":
         return nn.Identity()
     else:
         raise NotImplementedError()
-
-class TwoDToThreeDTransform(nn.Module):
-    def __init__(self): super(TwoDToThreeDTransform, self).__init__()
-    def forward(self, x):
-        assert len(x.shape) == 2
-        return x.unsqueeze(0)
 
 def get_fewshot_dataset(dataset, n_way=-1, n_shot=-1, classes=None, seed=0,   
     fewer_shots_if_needed=False):
@@ -156,6 +146,7 @@ def get_fewshot_dataset(dataset, n_way=-1, n_shot=-1, classes=None, seed=0,
         indices = Utils.flatten([idxs for idxs in class2idxs.values()])
         return ImageFolderSubset(dataset,
             indices=indices,
+            replace_transform=dataset.transform,
             in_memory=dataset.in_memory if hasattr(dataset, "in_memory") else False)
 
 class ImageFolderSubset(Dataset):
