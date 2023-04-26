@@ -157,4 +157,3 @@ def parser_with_imle_args(P):
     P.add_argument("--adain_x_mod", default="none", choices=["linear", "none"],
         help="How features are transformed in AdaIN prior to possibly norm")
     return P
-

@@ -7,6 +7,7 @@ from PIL import Image
 import random
 import torch
 import torch.nn as nn
+import torchvision
 import matplotlib.pyplot as plt
 import io
 
@@ -157,6 +158,15 @@ def flatten(xs):
     else:
         return [xs]
 
+def compose(*args):
+    """Returns a function that is the composition of [args]."""
+    def f(x):
+        for a in args:
+            x = a(x)
+        return x
+    return f
+
+
 def hierararchical_hasattr(obj, attrs_list):
     """Returns if the sequence of attributes in [attrs_list] accesses something
     in object [obj]. Example: if the code `x = obj.a.b.c` would work, then
@@ -170,44 +180,22 @@ def hierararchical_hasattr(obj, attrs_list):
             return False
     return True
 
-def images_to_pil_image(images, sigmoid=True, color=False):
-    """Returns tensor datastructure [images] as a PIL image that can thus be
-    easily saved.
-
-    This function should handle a myriad of inputs and thus pull complexity from
-    other places in the code inside of it.
-    """
-    if len(images.shape) == 3:
-        images = images.view(1, 1, *images.shape)
-    elif len(images.shape) == 4: # Assume batch index should be rows
-        images = images.view(images.shape[0], 1, *images.shape[1:])
-    elif len(images.shape) == 5:
-        images = images
-
-    # We need this because we use BCEWithLogitsLoss and don't put nn.Sigmoid at
-    # the end of our model. This visually represents model confidence in respect
-    # to loss. Note that if we use MSELoss, we should set sigmoid=False and not
-    # do this.
-    images = torch.sigmoid(images) if sigmoid else images 
-
-    fig, axs = plt.subplots(ncols=max([len(image_row) for image_row in images]),
-        nrows=len(images),
-        squeeze=False)
-
-    for i,images_row in enumerate(images):
-        for j,image in enumerate(images_row):
-            image = torch.clip((image * 255), 0, 255).int().cpu()
-            image = image.permute(-2, -1, 0) if len(image.shape) == 3 else image
-            axs[i, j].imshow(np.asarray(image), cmap='Greys_r')
-            axs[i, j].set(xticklabels=[], yticklabels=[], xticks=[], yticks=[])
-
-    buf = io.BytesIO()
-    fig.savefig(buf, dpi=256)
-    buf.seek(0)
-    plt.close("all")
-    result = Image.open(buf)
-    del buf
-    return result
+def images_to_pil_image(images, sigmoid=False, scale_each=True):
+    if len(images.shape) == 5:
+        nrow = images.shape[1]
+        ncol = images.shape[0]
+        images = images.view(nrow * ncol, *images.shape[2:])
+    else:
+        raise NotImplementedError()
+    
+    images = torch.sigmoid(images) if sigmoid else images
+    grid = torchvision.utils.make_grid(images,
+        nrow=nrow, ncol=ncol,
+        scale_each=scale_each,
+        normalize=True)
+    ndarr = torch.clip((grid * 255), 0, 255).to("cpu", torch.uint8)
+    ndarr = ndarr.permute(1, 2, 0).to("cpu").numpy()
+    return Image.fromarray(ndarr)
 
 def embeddings_to_pil_image(embeddings, classes, method="plain"):
     """Returns a PIL image of [embeddings] and [classes] represented in feature

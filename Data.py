@@ -1,4 +1,5 @@
 import argparse
+import copy
 from collections import defaultdict
 import math
 import numpy as np
@@ -74,11 +75,11 @@ def get_transforms_tr(args):
             transforms.Lambda(lambda x: min_max_normalization(x, 0, 1)),
         ])
     elif args.data_tr == "cifar10":
-        return nn.Identity()
-        # return transforms.Compose([
-        #     transforms.RandomHorizontalFlip(),
-        #     transforms.RandomResizedCrop(32, scale=(0.75, 1.0), ratio=(0.75, 4/3))
-        # ])
+        return transforms.Compose([
+            transforms.RandomHorizontalFlip(),
+            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+            transforms.RandomResizedCrop(32, scale=(0.75, 1.0), ratio=(0.75, 4/3))
+        ])
     else:
         raise NotImplementedError()
 
@@ -93,7 +94,7 @@ def get_transforms_te(args):
             transforms.Lambda(lambda x: min_max_normalization(x, 0, 1)),
         ])
     elif args.data_tr == "cifar10":
-        return nn.Identity()
+        return transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
     else:
         raise NotImplementedError()
 
@@ -147,8 +148,7 @@ def get_fewshot_dataset(dataset, n_way=-1, n_shot=-1, classes=None, seed=0,
         indices = Utils.flatten([idxs for idxs in class2idxs.values()])
         return ImageFolderSubset(dataset,
             indices=indices,
-            replace_transform=dataset.transform,
-            in_memory=dataset.in_memory if hasattr(dataset, "in_memory") else False)
+            replace_transform=dataset.transform)
 
 class ImageFolderSubset(Dataset):
     """Subset of an ImageFolder that preserves key attributes. Besides
@@ -182,11 +182,17 @@ class ImageFolderSubset(Dataset):
                             [replace_transform] to be a transform that can intake
                             tensors
     """
-    def __init__(self, data, indices=None, replace_transform=None, target_transform=None, in_memory=False):
+    def __init__(self, data, indices=None, replace_transform=None, target_transform=None, in_memory=None):
         super(ImageFolderSubset, self).__init__()
         indices = range(len(data)) if indices is None else indices
         self.indices = np.array(list(indices)).astype(np.int64)
         self.data = data
+        
+        # Set [in_memory] intelligently according to [data] unless it's overriden
+        if hasattr(data, "in_memory"):
+            self.in_memory = in_memory or data.in_memory
+        else:
+            self.in_memory = False if in_memory is None else in_memory
 
         if isinstance(data.targets, list):
             data_targets = np.array(data.targets)
@@ -212,6 +218,10 @@ class ImageFolderSubset(Dataset):
         # build. However, some datasets ***glares at the MNIST and CIFAR10***
         # contain a 'data' attribute that stores just the x-values. This can
         # take a bit.
+        #
+        # For our purposes, it's important that [samples] is a list of (x,y) pairs
+        # such that [data.loader] applied to [x] yields either a PIL image or a
+        # NumPy array.
         if hasattr(data, "samples"):
             self.samples = [(data.samples[idx][0], self.target2idx[data.samples[idx][1]]) for idx in tqdm(indices,
                 dynamic_ncols=True,
@@ -227,17 +237,15 @@ class ImageFolderSubset(Dataset):
        
         self.targets = [y for _,y in self.samples]
 
-        self.in_memory = in_memory
-        if not self.in_memory:
-            self.transform = data.transform if replace_transform is None else replace_transform
-            self.target_transform = data.target_transform
-            self.loader = data.loader if hasattr(data, "loader") else (lambda x: x)
-        else:
+        self.loader = data.loader if hasattr(data, "loader") else (lambda x: x)
+        if self.in_memory:
             self.transform = replace_transform
             self.target_transform = target_transform
-            self.X, self.Y = dataset_to_tensors(data)
-            self.loader = lambda x: x
-
+            self.X, self.Y = dataset_to_tensors(NoAugsImageFolder(self))
+        else:
+            self.transform = data.transform if replace_transform is None else replace_transform
+            self.target_transform = data.target_transform
+        
         self.n_way = len(self.class2idx)
         self.n_shot = len(self.samples) // self.n_way # This is an average
         
@@ -273,6 +281,18 @@ class ImageFolderSubset(Dataset):
         else:
             raise NotImplementedError()
 
+class NoAugsImageFolder(Dataset):
+    """Equivalent to [dataset] but the only "augmentation" is ToTensor()."""
+    def __init__(self, dataset):
+        super(NoAugsImageFolder, self).__init__()
+        self.samples = dataset.samples
+        self.loader_fn = Utils.compose(dataset.loader, transforms.ToTensor())
+
+    def __len__(self): return len(self.samples)
+    def __getitem__(self, idx):
+        x,y = self.samples[idx]
+        return self.loader_fn(x), y
+
 class ZipDataset(Dataset):
     """Dataset returning the idxth element of any number of wrapped datasets. To
     handle datasets of different sizes, the actual element returned from dataset
@@ -291,7 +311,7 @@ class ZipDataset(Dataset):
 
 def dataset_to_tensors(dataset, bs=1000, num_workers=12):
     """Returns an (X, Y) tuple where [X] is the x-values of [dataset] and [Y] its
-    y-values. [dataset] should return PIL images.
+    y-values. [dataset] must output un-augmented tensors from its __getitem__().
     """
     loader = torch.utils.data.DataLoader(dataset,
         batch_size=bs,

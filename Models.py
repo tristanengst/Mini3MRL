@@ -199,7 +199,7 @@ class ConvDecoder(nn.Module):
         self.model = nn.Sequential(
             nn.Linear(args.feat_dim, 4 * hc*8*8),
             nn.ReLU(inplace=True),
-            ReshapeLayer(shape=(-1, 4 * hc, 8, 8)),
+            nn.Unflatten(-1, (4 * hc, 8, 8)),
             nn.ConvTranspose2d(4 * hc, 4 * hc, 3, padding=1),
             nn.ReLU(inplace=True),
             nn.ConvTranspose2d(4 * hc, 2 * hc, 3, padding=1, stride=2, output_padding=1),
@@ -473,13 +473,6 @@ class EqualizedLinear(nn.Module):
     def forward(self, x):
         bias = self.bias * self.b_mul if self.bias is not None else self.bias
         return nn.functional.linear(x, self.weight * self.w_mul, bias)
-
-class ReshapeLayer(nn.Module):
-    def __init__(self, shape):
-        super(ReshapeLayer, self).__init__()
-        self.shape = shape
-    
-    def forward(self, x): return x.view(*self.shape)
 
 class TrueAdaIN(nn.Module):
 

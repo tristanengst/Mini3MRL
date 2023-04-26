@@ -61,42 +61,42 @@ def evaluate(model, data_tr, data_val, scheduler, args, cur_step, nx_data_tr=Non
         dataset=data_val,
         args=args)
 
-    # Generate embeddings.
-    embeds_pre_fuse_tr, targets_pre_fuse_tr = ImageDataset.generate_embeddings(nx_data_tr, model, args, mode="pre_fuse")
-    embeds_pre_fuse_val, targets_pre_fuse_val = ImageDataset.generate_embeddings(nx_data_val, model, args, mode="pre_fuse")
-    embeds_no_noise_tr, targets_no_noise_tr = ImageDataset.generate_embeddings(nx_data_tr, model, args, mode="no_noise")
-    embeds_no_noise_val, targets_no_noise_val = ImageDataset.generate_embeddings(nx_data_val, model, args, mode="no_noise")
+    # # Generate embeddings.
+    # embeds_pre_fuse_tr, targets_pre_fuse_tr = ImageDataset.generate_embeddings(nx_data_tr, model, args, mode="pre_fuse")
+    # embeds_pre_fuse_val, targets_pre_fuse_val = ImageDataset.generate_embeddings(nx_data_val, model, args, mode="pre_fuse")
+    # embeds_no_noise_tr, targets_no_noise_tr = ImageDataset.generate_embeddings(nx_data_tr, model, args, mode="no_noise")
+    # embeds_no_noise_val, targets_no_noise_val = ImageDataset.generate_embeddings(nx_data_val, model, args, mode="no_noise")
 
-    if args.feat_dim < 3:
-        embedding_visualization = {
-            "embeds/pre_fuse_vis/tr": wandb.Image(Utils.embeddings_to_pil_image(embeds_pre_fuse_tr, targets_pre_fuse_tr)),
-            "embeds/pre_fuse_vis/val": wandb.Image(Utils.embeddings_to_pil_image(embeds_pre_fuse_val, targets_pre_fuse_val)),
-            "embeds/no_noise_vis/tr": wandb.Image(Utils.embeddings_to_pil_image(embeds_no_noise_tr, targets_no_noise_tr)),
-            "embeds/no_noise_vis/val": wandb.Image(Utils.embeddings_to_pil_image(embeds_no_noise_val, targets_no_noise_val))}
-    else:
-        embedding_visualization = {}
+    # if args.feat_dim < 3:
+    #     embedding_visualization = {
+    #         "embeds/pre_fuse_vis/tr": wandb.Image(Utils.embeddings_to_pil_image(embeds_pre_fuse_tr, targets_pre_fuse_tr)),
+    #         "embeds/pre_fuse_vis/val": wandb.Image(Utils.embeddings_to_pil_image(embeds_pre_fuse_val, targets_pre_fuse_val)),
+    #         "embeds/no_noise_vis/tr": wandb.Image(Utils.embeddings_to_pil_image(embeds_no_noise_tr, targets_no_noise_tr)),
+    #         "embeds/no_noise_vis/val": wandb.Image(Utils.embeddings_to_pil_image(embeds_no_noise_val, targets_no_noise_val))}
+    # else:
+    #     embedding_visualization = {}
 
-    embedding_results = {
-        "embeds/pre_fuse_mean/tr": torch.mean(embeds_pre_fuse_tr),
-        "embeds/pre_fuse_mean/val": torch.mean(embeds_pre_fuse_val),
-        "embeds/no_noise_mean/tr": torch.mean(embeds_no_noise_tr),
-        "embeds/no_noise_mean/val": torch.mean(embeds_no_noise_val),
+    # embedding_results = {
+    #     "embeds/pre_fuse_mean/tr": torch.mean(embeds_pre_fuse_tr),
+    #     "embeds/pre_fuse_mean/val": torch.mean(embeds_pre_fuse_val),
+    #     "embeds/no_noise_mean/tr": torch.mean(embeds_no_noise_tr),
+    #     "embeds/no_noise_mean/val": torch.mean(embeds_no_noise_val),
 
-        "embeds/pre_fuse_feat_std/tr": torch.mean(torch.std(embeds_pre_fuse_tr, dim=0)),
-        "embeds/pre_fuse_feat_std/val": torch.mean(torch.std(embeds_pre_fuse_val, dim=0)),
-        "embeds/no_noise_feat_std/tr": torch.mean(torch.std(embeds_no_noise_tr, dim=0)),
-        "embeds/no_noise_feat_std/val": torch.mean(torch.std(embeds_no_noise_val, dim=0)),
+    #     "embeds/pre_fuse_feat_std/tr": torch.mean(torch.std(embeds_pre_fuse_tr, dim=0)),
+    #     "embeds/pre_fuse_feat_std/val": torch.mean(torch.std(embeds_pre_fuse_val, dim=0)),
+    #     "embeds/no_noise_feat_std/tr": torch.mean(torch.std(embeds_no_noise_tr, dim=0)),
+    #     "embeds/no_noise_feat_std/val": torch.mean(torch.std(embeds_no_noise_val, dim=0)),
 
-        "embeds/pre_fuse_ex_std/tr": torch.mean(torch.std(embeds_pre_fuse_tr, dim=1)),
-        "embeds/pre_fuse_ex_std/val": torch.mean(torch.std(embeds_pre_fuse_val, dim=1)),
-        "embeds/no_noise_ex_std/tr": torch.mean(torch.std(embeds_no_noise_tr, dim=1)),
-        "embeds/no_noise_ex_std/val": torch.mean(torch.std(embeds_no_noise_val, dim=1)),
+    #     "embeds/pre_fuse_ex_std/tr": torch.mean(torch.std(embeds_pre_fuse_tr, dim=1)),
+    #     "embeds/pre_fuse_ex_std/val": torch.mean(torch.std(embeds_pre_fuse_val, dim=1)),
+    #     "embeds/no_noise_ex_std/tr": torch.mean(torch.std(embeds_no_noise_tr, dim=1)),
+    #     "embeds/no_noise_ex_std/val": torch.mean(torch.std(embeds_no_noise_val, dim=1)),
 
-        "embeds/pre_fuse_abs/tr": torch.mean(torch.abs(embeds_pre_fuse_tr)),
-        "embeds/pre_fuse_abs/val": torch.mean(torch.abs(embeds_pre_fuse_val)),
-        "embeds/no_noise_abs/tr": torch.mean(torch.abs(embeds_no_noise_tr)),
-        "embeds/no_noise_abs/val": torch.mean(torch.abs(embeds_no_noise_val)),
-    }
+    #     "embeds/pre_fuse_abs/tr": torch.mean(torch.abs(embeds_pre_fuse_tr)),
+    #     "embeds/pre_fuse_abs/val": torch.mean(torch.abs(embeds_pre_fuse_val)),
+    #     "embeds/no_noise_abs/tr": torch.mean(torch.abs(embeds_no_noise_tr)),
+    #     "embeds/no_noise_abs/val": torch.mean(torch.abs(embeds_no_noise_val)),
+    # }
     
     # Generate images
     images_tr = ImageDataset.generate_images(nx_data_tr, model, args)
@@ -136,15 +136,15 @@ def evaluate(model, data_tr, data_val, scheduler, args, cur_step, nx_data_tr=Non
         tqdm.write(f"Computed epoch as {epoch} so not probing")
         probe_results = {}
 
-    wandb.log(probe_results | embedding_results | embedding_visualization | {
-        "loss/mean/tr": loss_tr_mean,
-        "loss/mean/val": loss_val_mean,
-        "lr": scheduler.get_lr(),
-        "train_step": cur_step,
-        "images/val": wandb.Image(images_val),
-        "images/tr": wandb.Image(images_tr),
-        "epoch": epoch,
-    }, step=cur_step)
+    # wandb.log(probe_results | embedding_results | embedding_visualization | {
+    #     "loss/mean/tr": loss_tr_mean,
+    #     "loss/mean/val": loss_val_mean,
+    #     "lr": scheduler.get_lr(),
+    #     "train_step": cur_step,
+    #     "images/val": wandb.Image(images_val),
+    #     "images/tr": wandb.Image(images_tr),
+    #     "epoch": epoch,
+    # }, step=cur_step)
 
 class ImageDataset(Dataset):
     def __init__(self, data, noised_images, images):
@@ -255,7 +255,9 @@ class ImageDataset(Dataset):
                 #     output[start_idx:stop_idx, 3+j_idx*2] = nx
                 #     output[start_idx:stop_idx, 4+j_idx*2] = model(nx).cpu()
 
-        return Utils.images_to_pil_image(output, sigmoid=(args.loss == "bce"))
+        return Utils.images_to_pil_image(output,
+            sigmoid=(args.loss == "bce"),
+            scale_each=(not args.data_tr == "mnist"))
 
     @staticmethod
     def eval_model(nx_data, model, args, loss_fn=None):
@@ -273,11 +275,11 @@ class ImageDataset(Dataset):
         loss, total = 0, 0
         loss_fn = Models.get_loss_fn(args, reduction="mean")
 
-        if args.arch == "conv":
-            nx_data = Subset(nx_data, indices=Utils.sample(
-                range(len(nx_data)),
-                k=min(len(nx_data), 1000),
-                seed=args.seed))
+        # if args.arch == "conv":
+        #     nx_data = Subset(nx_data, indices=Utils.sample(
+        #         range(len(nx_data)),
+        #         k=min(len(nx_data), 1000),
+        #         seed=args.seed))
 
         with torch.no_grad():
             loader = DataLoader(nx_data,
@@ -357,6 +359,9 @@ def get_args(args=None):
 
     if not args.probe_trials == 1:
         raise NotImplementedError(f"Running multiple probe trials is currently not supported in a script that logs to WandB.")
+    if args.arch == "conv" and (args.encoder_h_dim > 16 or args.decoder_h_dim > 16):
+        raise ValueError()
+
     return args
 
 if __name__ == "__main__":
