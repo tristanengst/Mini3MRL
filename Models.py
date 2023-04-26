@@ -1,4 +1,5 @@
 from collections import OrderedDict
+from functools import partial
 import torch
 import torch.nn as nn
 from tqdm import tqdm as tqdm
@@ -19,6 +20,8 @@ def get_model(args, imle=False, **kwargs):
         return IMLEOneDBasic(args, **kwargs)
     elif args.arch == "mlp" and not imle:
         return DAE_MLP(args)
+    elif args.arch == "conv" and not imle:
+        return DAE_Conv(args)
     else:
         raise NotImplementedError()
 
@@ -30,6 +33,12 @@ def get_loss_fn(args, reduction="mean"):
         return nn.MSELoss(reduction=reduction)
     else:
         raise NotImplementedError()
+
+def get_fusion(args, ignore_latents=False):
+    if args.fusion == "adain":
+        return IgnoreLatentAdaIN(args) if ignore_latents else AdaIN(args)
+    elif args.fusion == "true_adain":
+        return TrueAdaIN(args)
 
 class MLP(nn.Module):
     def __init__(self, in_dim, h_dim=256, out_dim=42, layers=2, lrmul=0.01,
@@ -70,6 +79,9 @@ class MLP(nn.Module):
                 
     def forward(self, x): return self.model(x)
 
+#################################################################################
+# MNIST Architectures
+#################################################################################
 class MLPEncoder(MLP):
 
     def __init__(self, in_dim=784, encoder_h_dim=1024, feat_dim=64, leaky_relu=False, num_encoder_layers=2, **kwargs):
@@ -151,59 +163,76 @@ class IMLE_DAE_MLP(nn.Module):
         ignore_latent_imle_dae_mlp.load_state_dict(self.state_dict(), strict=False)
         return ignore_latent_imle_dae_mlp
 
+#################################################################################
+# CIFAR Architectures
+#################################################################################
 class ConvEncoder(nn.Module):
-    def __init__(self, feat_dim=256, hidden_channels=32, **kwargs):
+    def __init__(self, args, **kwargs):
         super(ConvEncoder, self).__init__()
-        self.feat_dim = feat_dim
+        self.feat_dim = args.feat_dim
+        hc = args.encoder_h_dim
         self.model = nn.Sequential(
-            nn.Conv2d(3, hidden_channels, 3, padding=1),
+            nn.Conv2d(3, hc, 3, padding=1),
             nn.ReLU(inplace=True),
-            nn.Conv2d(hidden_channels, hidden_channels, 3, padding=1), 
+            nn.Conv2d(hc, hc, 3, padding=1), 
             nn.ReLU(inplace=True),
-            nn.Conv2d(hidden_channels, 2*hidden_channels, 3, padding=1, stride=2),
+            nn.Conv2d(hc, 2 * hc, 3, padding=1, stride=2),
             nn.ReLU(inplace=True),
-            nn.Conv2d(2*hidden_channels, 2*hidden_channels, 3, padding=1),
+            nn.Conv2d(2 * hc, 2 * hc, 3, padding=1),
             nn.ReLU(inplace=True),
-            nn.Conv2d(2*hidden_channels, 4*hidden_channels, 3, padding=1, stride=2),
+            nn.Conv2d(2 * hc, 4 * hc, 3, padding=1, stride=2),
             nn.ReLU(inplace=True),
-            nn.Conv2d(4*hidden_channels, 4*hidden_channels, 3, padding=1),
+            nn.Conv2d(4 * hc, 4 * hc, 3, padding=1),
             nn.ReLU(inplace=True),
             nn.Flatten(),
-            nn.Linear(256 * hidden_channels, feat_dim), # harcoded for 32x32 inputs
-            nn.ReLU(inplace=True)
-        )
+            nn.Linear(256 * hc, args.feat_dim), # harcoded for 32x32 inputs
+            nn.ReLU(inplace=True))
+        self.model.apply(partial(init_weights_fn, args))
 
     def forward(self, x): return self.model(x)
 
 class ConvDecoder(nn.Module):
-    def __init__(self, feat_dim=256, hidden_channels=32, **kwargs):
+    def __init__(self, args, **kwargs):
         super(ConvDecoder, self).__init__()
-        self.feat_dim = feat_dim
+        self.feat_dim = args.feat_dim
+        hc = args.decoder_h_dim
         self.model = nn.Sequential(
-            nn.Linear(feat_dim, 4*hidden_channels*8*8),
+            nn.Linear(args.feat_dim, 4 * hc*8*8),
             nn.ReLU(inplace=True),
-            ReshapeLayer(shape=(-1, 4*hidden_channels, 8, 8)),
-            nn.ConvTranspose2d(4*hidden_channels, 4*hidden_channels, 3, padding=1),
+            ReshapeLayer(shape=(-1, 4 * hc, 8, 8)),
+            nn.ConvTranspose2d(4 * hc, 4 * hc, 3, padding=1),
             nn.ReLU(inplace=True),
-            nn.ConvTranspose2d(4*hidden_channels, 2*hidden_channels, 3, padding=1, stride=2, output_padding=1),
+            nn.ConvTranspose2d(4 * hc, 2 * hc, 3, padding=1, stride=2, output_padding=1),
             nn.ReLU(inplace=True),
-            nn.ConvTranspose2d(2*hidden_channels, 2*hidden_channels, 3, padding=1),
+            nn.ConvTranspose2d(2 * hc, 2 * hc, 3, padding=1),
             nn.ReLU(inplace=True),
-            nn.ConvTranspose2d(2*hidden_channels, hidden_channels, 3, padding=1, stride=2, output_padding=1),
+            nn.ConvTranspose2d(2 * hc, hc, 3, padding=1, stride=2, output_padding=1),
+            nn.ReLU(inplace=True), 
+            nn.ConvTranspose2d(hc, hc, 3, padding=1),
             nn.ReLU(inplace=True),
-            nn.ConvTranspose2d(hidden_channels, hidden_channels, 3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.ConvTranspose2d(hidden_channels, 3, 3, padding=1))
+            nn.ConvTranspose2d(hc, 3, 3, padding=1))
+        self.model.apply(partial(init_weights_fn, args))
 
     def forward(self, x): return self.model(x)
+
+class DAE_Conv(nn.Module):
+    """Adapted from https://blog.paperspace.com/convolutional-autoencoder/."""
+    def __init__(self, args, **kwargs):
+        super(DAE_Conv, self).__init__()
+        self.args = args
+        self.encoder = ConvEncoder(args)
+        self.decoder = ConvDecoder(args)
+        self.feat_dim = args.feat_dim
+
+    def forward(self, x): return self.decoder(self.encoder(x))
 
 class IMLE_DAE_Conv(nn.Module):
     """Adapted from https://blog.paperspace.com/convolutional-autoencoder/."""
     def __init__(self, args, **kwargs):
         super(IMLE_DAE_Conv, self).__init__()
         self.args = args
-        self.encoder = ConvEncoder(**vars(args))
-        self.decoder = ConvDecoder(**vars(args))
+        self.encoder = ConvEncoder(args)
+        self.decoder = ConvDecoder(args)
         self.ada_in = get_fusion(args)
         self.feat_dim = args.feat_dim
         self.latent_dim = args.latent_dim
@@ -226,7 +255,18 @@ class IMLE_DAE_Conv(nn.Module):
         return EncoderWithAdaIn(self.encoder, self.ada_in,
             use_mean_representation=use_mean_representation)
 
+def init_weights_fn(args, module):
+    if args.init == "baseline" and args.arch == "conv":
+        if isinstance(module, nn.Conv2d):
+            torch.nn.init.xavier_uniform_(module.weight)
+            module.bias.data.fill_(0.01)
+        elif isinstance(module, nn.Linear):
+            torch.nn.init.xavier_uniform_(module.weight)
+            module.bias.data.fill_(0.01)
 
+#################################################################################
+# Misc/General
+#################################################################################
 def get_codes(bs, code_dim, device="cpu", seed=None):
     """Returns [bs] latent codes to be passed into the model.
 
@@ -263,12 +303,7 @@ class EncoderWithAdaIn(nn.Module):
         seed    -- None for no seed (outputs will be different on different
                     calls), or a number for a fixed seed
         """
-        if seed is None:
-            return torch.randn(bs, self.latent_dim, device=device)
-        else:
-            z = torch.zeros(bs, self.latent_dim, device=device)
-            z.normal_(generator=torch.Generator(device).manual_seed(seed))
-            return z
+        return get_codes(bs, self.latent_dim, device=device, seed=seed)
 
     def forward(self, x, z=None, num_z=1, seed=None):
         in_shape = x.shape[1:]
@@ -279,8 +314,7 @@ class EncoderWithAdaIn(nn.Module):
                 z = self.get_codes(len(x) * num_z,  device=x.device, seed=seed)
 
             bs = x.shape[0]
-            fx = self.encoder(x)
-            fx = self.ada_in(fx, z)
+            fx = self.ada_in(self.encoder(x), z)
             fx = fx.view(bs, num_z, -1)
             fx = fx.mean(dim=1)
             return fx
@@ -547,9 +581,5 @@ class IMLEOneDBasic(nn.Module):
         fx = torch.repeat_interleave(fx, z.shape[0] // x.shape[0], dim=0)
         return fx + self.ada_in(z)
 
-def get_fusion(args, ignore_latents=False):
-    if args.fusion == "adain":
-        return IgnoreLatentAdaIN(args) if ignore_latents else AdaIN(args)
-    elif args.fusion == "true_adain":
-        return TrueAdaIN(args)
+
     

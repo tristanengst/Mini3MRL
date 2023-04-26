@@ -95,15 +95,17 @@ def parser_with_training_args(P):
     P.add_argument("--num_decoder_layers", type=int, default=2,
         help="Number of encoder layers")
     P.add_argument("--encoder_h_dim", type=int, default=1024,
-        help="Encoder hidden dimension")
+        help="Encoder hidden dimension/channels")
     P.add_argument("--decoder_h_dim", type=int, default=1024,
-        help="Decoder hidden dimension")
+        help="Decoder hidden dimension/channels")
     P.add_argument("--wd", type=float, default=1e-5,
         help="Weight decay on generative task")
     P.add_argument("--zero_half_target", choices=[0, 1, 2], default=0, type=int,
         help="Whether half the target (bottom or top, randomly) should be zeroed out")
     P.add_argument("--loss", choices=["bce", "mse"], default="mse",
         help="Loss function")
+    P.add_argument("--init", default="baseline",
+        help="Weight init method")
     return P
 
 def parser_with_probe_args(P):

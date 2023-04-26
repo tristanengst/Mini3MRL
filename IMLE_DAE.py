@@ -539,8 +539,7 @@ if __name__ == "__main__":
         _ = Utils.save_code_under_folder(imle_model_folder(args))
 
     cur_step = (last_epoch + 1) * args.ipe * math.ceil(len(data_tr) / args.bs)
-    num_steps = args.ipe * math.ceil(len(data_tr) / args.bs)
-    log_iter = max(1, num_steps // 100000)
+    num_steps = args.epochs * args.ipe * math.ceil(len(data_tr) / args.bs)
 
     if not args.eval_iter == 0:
         _ = evaluate(model, data_tr, data_val, scheduler, args, cur_step)

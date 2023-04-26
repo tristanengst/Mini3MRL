@@ -103,6 +103,11 @@ if __name__ == "__main__":
 
     with open("slurm/slurm_template.txt", "r") as f:
         slurm_template = f.read()
+
+    # When emailed that the job has started, we'll know the time it took to queue
+    # and the number of GPUs requested and how long it was asked to run for
+    name = f"{name}-GPUS{num_gpus}-TIME{slurm_args.time}"
+
     slurm_template = slurm_template.replace("ACCOUNT", slurm_args.account)
     slurm_template = slurm_template.replace("TIME", slurm_args.time)
     slurm_template = slurm_template.replace("NUM_GPUS", str(num_gpus))

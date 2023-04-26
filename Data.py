@@ -74,10 +74,11 @@ def get_transforms_tr(args):
             transforms.Lambda(lambda x: min_max_normalization(x, 0, 1)),
         ])
     elif args.data_tr == "cifar10":
-        return transforms.Compose([
-            transforms.RandomHorizontalFlip(),
-            transforms.RandomResizedCrop(32, scale=(0.75, 1.0), ratio=(0.75, 4/3))
-        ])
+        return nn.Identity()
+        # return transforms.Compose([
+        #     transforms.RandomHorizontalFlip(),
+        #     transforms.RandomResizedCrop(32, scale=(0.75, 1.0), ratio=(0.75, 4/3))
+        # ])
     else:
         raise NotImplementedError()
 

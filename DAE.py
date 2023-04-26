@@ -1,6 +1,7 @@
 import argparse
 import os
 import itertools
+import math
 import numpy as np
 import sys
 import time
@@ -100,11 +101,15 @@ def evaluate(model, data_tr, data_val, scheduler, args, cur_step, nx_data_tr=Non
     # Generate images
     images_tr = ImageDataset.generate_images(nx_data_tr, model, args)
     images_val = ImageDataset.generate_images(nx_data_val, model, args)
-    if args.save_iter > 0:
-        image_save_folder = f"{dae_model_folder(args, make_folder=True)}/images"
-        Utils.conditional_make_folder(image_save_folder)
-        images_tr.save(f"{image_save_folder}/{cur_step}_tr.png")
-        images_val.save(f"{image_save_folder}/{cur_step}_val.png")
+    # if args.save_iter > 0:
+    #     image_save_folder = f"{dae_model_folder(args, make_folder=True)}/images"
+    #     Utils.conditional_make_folder(image_save_folder)
+    #     images_tr.save(f"{image_save_folder}/{cur_step}_tr.png")
+    #     images_val.save(f"{image_save_folder}/{cur_step}_val.png")
+    image_save_folder = f"{dae_model_folder(args, make_folder=True)}/images"
+    Utils.conditional_make_folder(image_save_folder)
+    images_tr.save(f"{image_save_folder}/{cur_step}_tr.png")
+    images_val.save(f"{image_save_folder}/{cur_step}_val.png")
 
     # Evaluate on the proxy task
     loss_tr_mean = ImageDataset.eval_model(nx_data_tr, model, args)
@@ -245,10 +250,10 @@ class ImageDataset(Dataset):
                 output[start_idx:stop_idx, 1] = nx
                 output[start_idx:stop_idx, 2] = model(nx).cpu()
 
-                for j_idx in range(num_samples // 2):
-                    nx = Utils.with_noise(x, std=args.std, seed=noise_seed+j_idx)
-                    output[start_idx:stop_idx, 3+j_idx*2] = nx
-                    output[start_idx:stop_idx, 4+j_idx*2] = model(nx).cpu()
+                # for j_idx in range(num_samples // 2):
+                #     nx = Utils.with_noise(x, std=args.std, seed=noise_seed+j_idx)
+                #     output[start_idx:stop_idx, 3+j_idx*2] = nx
+                #     output[start_idx:stop_idx, 4+j_idx*2] = model(nx).cpu()
 
         return Utils.images_to_pil_image(output, sigmoid=(args.loss == "bce"))
 
@@ -267,11 +272,17 @@ class ImageDataset(Dataset):
         """
         loss, total = 0, 0
         loss_fn = Models.get_loss_fn(args, reduction="mean")
+
+        if args.arch == "conv":
+            nx_data = Subset(nx_data, indices=Utils.sample(
+                range(len(nx_data)),
+                k=min(len(nx_data), 1000),
+                seed=args.seed))
+
         with torch.no_grad():
             loader = DataLoader(nx_data,
-                batch_size=args.bs,
+                batch_size=args.bs * 8,
                 num_workers=args.num_workers,
-                shuffle=False,
                 pin_memory=True)
             
             for xn,x in tqdm(loader,
@@ -370,12 +381,8 @@ if __name__ == "__main__":
         optimizer.load_state_dict(states["optimizer"])
         model = model.to(device)
         last_epoch = states["epoch"]
+        args.uid = states["args"].uid if args.continue_run else args.uid
 
-    wandb.init(anonymous="allow", id=args.uid, config=args,
-        mode=args.wandb, project="Mini3MRL", entity="apex-lab",
-        name=os.path.basename(dae_model_folder(args)),
-        settings=wandb.Settings(code_dir=os.path.dirname(__file__)))
-    
     scheduler = Utils.StepScheduler(optimizer, args.lrs, last_epoch=last_epoch)
     loss_fn = Models.get_loss_fn(args, reduction="mean")
     data_tr, data_val = Data.get_data_from_args(args)
@@ -386,11 +393,17 @@ if __name__ == "__main__":
     tqdm.write(f"---SCHEDULER---\n{scheduler}")
     tqdm.write(f"---TRAINING DATA---\n{data_tr}")
 
+    wandb.init(anonymous="allow", id=args.uid, config=args,
+        mode=args.wandb, project="Mini3MRL", entity="apex-lab",
+        name=os.path.basename(dae_model_folder(args)),
+        resume="allow" if args.continue_run else "never",
+        settings=wandb.Settings(code_dir=os.path.dirname(__file__)))
+
     if not args.save_iter == 0:
         _ = Utils.save_code_under_folder(dae_model_folder(args))
 
-    cur_step = (last_epoch + 1) * len(data_tr) // args.bs
-    num_steps = len(data_tr) // args.bs
+    cur_step = (last_epoch + 1) * math.ceil(len(data_tr) / args.bs)
+    num_steps = args.epochs * math.ceil(len(data_tr) / args.bs)
     _ = evaluate(model, data_tr, data_val, scheduler, args, cur_step)
     for epoch in tqdm(range(last_epoch + 1, args.epochs),
         dynamic_ncols=True,
