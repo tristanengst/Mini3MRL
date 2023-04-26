@@ -180,7 +180,7 @@ def hierararchical_hasattr(obj, attrs_list):
             return False
     return True
 
-def images_to_pil_image(images, sigmoid=False, scale_each=True):
+def images_to_pil_image(images, sigmoid=False):
     if len(images.shape) == 5:
         pass
     elif len(images.shape) == 4 and images.shape[-1] == 28:
@@ -193,9 +193,9 @@ def images_to_pil_image(images, sigmoid=False, scale_each=True):
     images = images.view(nrow * ncol, *images.shape[2:])
     
     images = torch.sigmoid(images) if sigmoid else images
+    images = torch.clip(images, 0, 1)
     grid = torchvision.utils.make_grid(images,
         nrow=nrow, ncol=ncol,
-        scale_each=scale_each,
         normalize=True)
     ndarr = torch.clip((grid * 255), 0, 255).to("cpu", torch.uint8)
     ndarr = ndarr.permute(1, 2, 0).to("cpu").numpy()

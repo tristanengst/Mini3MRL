@@ -256,8 +256,7 @@ class ImageDataset(Dataset):
                 #     output[start_idx:stop_idx, 4+j_idx*2] = model(nx).cpu()
 
         return Utils.images_to_pil_image(output,
-            sigmoid=(args.loss == "bce"),
-            scale_each=(not args.data_tr == "mnist"))
+            sigmoid=(args.loss == "bce"))
 
     @staticmethod
     def eval_model(nx_data, model, args, loss_fn=None):

@@ -299,8 +299,7 @@ class ImageLatentDataset(Dataset):
                 output[start_idx:stop_idx, 3:] = model(nx, num_z=num_samples, seed=latents_seed).view(len(data), num_samples, *nxz_data[0][2].shape).cpu()
 
         return Utils.images_to_pil_image(output,
-            sigmoid=(args.loss == "bce"),
-            scale_each=(not args.data_tr == "mnist"))
+            sigmoid=(args.loss == "bce"))
 
     @staticmethod
     def eval_model(nxz_data, model, args, loss_fn=None, use_sampled_codes=True):
