@@ -286,7 +286,11 @@ class NoAugsImageFolder(Dataset):
     def __init__(self, dataset):
         super(NoAugsImageFolder, self).__init__()
         self.samples = dataset.samples
-        self.loader_fn = Utils.compose(dataset.loader, transforms.ToTensor())
+        self.loader_fn = Utils.compose(dataset.loader, NoAugsImageFolder.tensor_if_not_tensor)
+
+    @staticmethod
+    def tensor_if_not_tensor(x):
+        return x if isinstance(x, torch.Tensor) else torchvision.transforms.functional.to_tensor(x)
 
     def __len__(self): return len(self.samples)
     def __getitem__(self, idx):

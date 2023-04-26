@@ -182,11 +182,15 @@ def hierararchical_hasattr(obj, attrs_list):
 
 def images_to_pil_image(images, sigmoid=False, scale_each=True):
     if len(images.shape) == 5:
-        nrow = images.shape[1]
-        ncol = images.shape[0]
-        images = images.view(nrow * ncol, *images.shape[2:])
+        pass
+    elif len(images.shape) == 4 and images.shape[-1] == 28:
+        images = images.view(images.shape[0], images.shape[1], 1, images.shape[-2], images.shape[-1])
     else:
-        raise NotImplementedError()
+        raise NotImplementedError(f"Wrong shape: {images.shape}")
+
+    nrow = images.shape[1]
+    ncol = images.shape[0]
+    images = images.view(nrow * ncol, *images.shape[2:])
     
     images = torch.sigmoid(images) if sigmoid else images
     grid = torchvision.utils.make_grid(images,
