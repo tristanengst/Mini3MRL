@@ -170,22 +170,21 @@ class ConvEncoder(nn.Module):
     def __init__(self, args, **kwargs):
         super(ConvEncoder, self).__init__()
         self.feat_dim = args.feat_dim
-        hc = args.encoder_h_dim
         self.model = nn.Sequential(
-            nn.Conv2d(3, hc, 3, padding=1),
+            nn.Conv2d(3, args.encoder_nc, 3, padding=1),
             nn.ReLU(inplace=True),
-            nn.Conv2d(hc, hc, 3, padding=1), 
+            nn.Conv2d(args.encoder_nc, args.encoder_nc, 3, padding=1), 
             nn.ReLU(inplace=True),
-            nn.Conv2d(hc, 2 * hc, 3, padding=1, stride=2),
+            nn.Conv2d(args.encoder_nc, 2 * args.encoder_nc, 3, padding=1, stride=2),
             nn.ReLU(inplace=True),
-            nn.Conv2d(2 * hc, 2 * hc, 3, padding=1),
+            nn.Conv2d(2 * args.encoder_nc, 2 * args.encoder_nc, 3, padding=1),
             nn.ReLU(inplace=True),
-            nn.Conv2d(2 * hc, 4 * hc, 3, padding=1, stride=2),
+            nn.Conv2d(2 * args.encoder_nc, 4 * args.encoder_nc, 3, padding=1, stride=2),
             nn.ReLU(inplace=True),
-            nn.Conv2d(4 * hc, 4 * hc, 3, padding=1),
+            nn.Conv2d(4 * args.encoder_nc, 4 * args.encoder_nc, 3, padding=1),
             nn.ReLU(inplace=True),
             nn.Flatten(),
-            nn.Linear(256 * hc, args.feat_dim), # harcoded for 32x32 inputs
+            nn.Linear(256 * args.encoder_nc, args.feat_dim), # harcoded for 32x32 inputs
             nn.ReLU(inplace=True))
         self.model.apply(partial(init_weights_fn, args))
 
@@ -195,22 +194,21 @@ class ConvDecoder(nn.Module):
     def __init__(self, args, **kwargs):
         super(ConvDecoder, self).__init__()
         self.feat_dim = args.feat_dim
-        hc = args.decoder_h_dim
         self.model = nn.Sequential(
-            nn.Linear(args.feat_dim, 4 * hc*8*8),
+            nn.Linear(args.feat_dim, 4 * args.decoder_nc * 8 * 8),
             nn.ReLU(inplace=True),
-            nn.Unflatten(-1, (4 * hc, 8, 8)),
-            nn.ConvTranspose2d(4 * hc, 4 * hc, 3, padding=1),
+            nn.Unflatten(-1, (4 * args.decoder_nc, 8, 8)),
+            nn.ConvTranspose2d(4 * args.decoder_nc, 4 * args.decoder_nc, 3, padding=1),
             nn.ReLU(inplace=True),
-            nn.ConvTranspose2d(4 * hc, 2 * hc, 3, padding=1, stride=2, output_padding=1),
+            nn.ConvTranspose2d(4 * args.decoder_nc, 2 * args.decoder_nc, 3, padding=1, stride=2, output_padding=1),
             nn.ReLU(inplace=True),
-            nn.ConvTranspose2d(2 * hc, 2 * hc, 3, padding=1),
+            nn.ConvTranspose2d(2 * args.decoder_nc, 2 * args.decoder_nc, 3, padding=1),
             nn.ReLU(inplace=True),
-            nn.ConvTranspose2d(2 * hc, hc, 3, padding=1, stride=2, output_padding=1),
+            nn.ConvTranspose2d(2 * args.decoder_nc, args.decoder_nc, 3, padding=1, stride=2, output_padding=1),
             nn.ReLU(inplace=True), 
-            nn.ConvTranspose2d(hc, hc, 3, padding=1),
+            nn.ConvTranspose2d(args.decoder_nc, args.decoder_nc, 3, padding=1),
             nn.ReLU(inplace=True),
-            nn.ConvTranspose2d(hc, 3, 3, padding=1))
+            nn.ConvTranspose2d(args.decoder_nc, 3, 3, padding=1))
         self.model.apply(partial(init_weights_fn, args))
 
     def forward(self, x): return self.model(x)

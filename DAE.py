@@ -255,8 +255,11 @@ class ImageDataset(Dataset):
                 #     output[start_idx:stop_idx, 3+j_idx*2] = nx
                 #     output[start_idx:stop_idx, 4+j_idx*2] = model(nx).cpu()
 
-        return Utils.images_to_pil_image(output,
-            sigmoid=(args.loss == "bce"))
+        result = Utils.images_to_pil_image(output,
+            sigmoid=(args.loss == "bce"), clip=(args.data_tr == "mnist"))
+        result.save("foo.png")
+        assert 0
+        return result
 
     @staticmethod
     def eval_model(nx_data, model, args, loss_fn=None):
@@ -349,8 +352,17 @@ def get_args(args=None):
     P = IO.parser_with_logging_args(P)
     P = IO.parser_with_training_args(P)
     P = IO.parser_with_probe_args(P)
+    args, unparsed_args = P.parse_known_args() if args is None else P.parse_known_args(args)
 
-    args = P.parse_args() if args is None else P.parse_args(args)
+    if args.data_tr == "mnist":
+        P = IO.parser_with_mnist_training_args(argparse.ArgumentParser())
+    elif args.data_tr == "cifar10":
+        P = IO.parser_with_cifar_training_args(argparse.ArgumentParser())
+    else:
+        raise ValueError()
+
+    args = Utils.namespace_union(args, P.parse_args(unparsed_args))
+
     args.uid = wandb.util.generate_id() if args.uid is None else args.uid
     args.script = "dae" if args.script is None else args.script
     args.lrs = Utils.StepScheduler.process_lrs(args.lrs)
@@ -358,8 +370,6 @@ def get_args(args=None):
 
     if not args.probe_trials == 1:
         raise NotImplementedError(f"Running multiple probe trials is currently not supported in a script that logs to WandB.")
-    if args.arch == "conv" and (args.encoder_h_dim > 16 or args.decoder_h_dim > 16):
-        raise ValueError()
 
     return args
 

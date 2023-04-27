@@ -298,8 +298,11 @@ class ImageLatentDataset(Dataset):
                 
                 output[start_idx:stop_idx, 3:] = model(nx, num_z=num_samples, seed=latents_seed).view(len(data), num_samples, *nxz_data[0][2].shape).cpu()
 
-        return Utils.images_to_pil_image(output,
-            sigmoid=(args.loss == "bce"))
+        result = Utils.images_to_pil_image(output,
+            sigmoid=(args.loss == "bce"), clip=(args.data_tr == "mnist"))
+        result.save("foo.png")
+        assert 0
+        return result
 
     @staticmethod
     def eval_model(nxz_data, model, args, loss_fn=None, use_sampled_codes=True):
@@ -479,7 +482,17 @@ def get_args(args=None):
     P = IO.parser_with_probe_args(P)
     P = IO.parser_with_imle_args(P)
 
-    args = P.parse_args() if args is None else P.parse_args(args)
+    args, unparsed_args = P.parse_known_args() if args is None else P.parse_known_args(args)
+
+    if args.data_tr == "mnist":
+        P = IO.parser_with_mnist_training_args(argparse.ArgumentParser())
+    elif args.data_tr == "cifar10":
+        P = IO.parser_with_cifar_training_args(argparse.ArgumentParser())
+    else:
+        raise ValueError()
+
+    args = Utils.namespace_union(args, P.parse_args(unparsed_args))
+
     args.uid = wandb.util.generate_id() if args.uid is None else args.uid
     args.script = "imle" if args.script is None else args.script
     args.lrs = Utils.StepScheduler.process_lrs(args.lrs)

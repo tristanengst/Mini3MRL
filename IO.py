@@ -75,19 +75,22 @@ def parser_with_data_args(P):
         help="Number of classes. -1 or 'all' for all")
     return P
 
-def parser_with_training_args(P):
-    P.add_argument("--arch", choices=["mlp", "1dbasic", "conv"], default="mlp",
+def parser_with_cifar_training_args(P):
+    P.add_argument("--arch", choices=["conv"], default="conv",
         help="Model architecture")
-    P.add_argument("--feat_dim", type=int, default=64,
+    P.add_argument("--std",type=float, default=.2,
+        help="Noise standard deviation")
+    P.add_argument("--encoder_nc", type=int, default=16,
+        help="Encoder hidden dimension/channels")
+    P.add_argument("--decoder_nc", type=int, default=16,
+        help="Decoder hidden dimension/channels")
+    P.add_argument("--feat_dim", type=int, default=1000,
         help="Dimensionality of the features extracted by the model")
-    P.add_argument("--leaky_relu", type=int, default=0, choices=[0, 1],
-        help="Use LeakyReLU instead of ReLU")
-    P.add_argument("--lrs", default=[0, 1e-5], type=float, nargs="*",
-        help="Learning rates. Even indices give step indices, odd indices give the learning rate to start at the step given at the prior index.")
-    P.add_argument("--epochs",type=int, default=500,
-        help="Number of epochs/samplings")
-    P.add_argument("--bs",type=int, default=1000,
-        help="Batch size")
+    return P
+
+def parser_with_mnist_training_args(P):
+    P.add_argument("--arch", choices=["mlp", "1dbasic"], default="mlp",
+        help="Model architecture")
     P.add_argument("--std",type=float, default=.8,
         help="Noise standard deviation")
     P.add_argument("--num_encoder_layers", type=int, default=2,
@@ -98,6 +101,19 @@ def parser_with_training_args(P):
         help="Encoder hidden dimension/channels")
     P.add_argument("--decoder_h_dim", type=int, default=1024,
         help="Decoder hidden dimension/channels")
+    P.add_argument("--feat_dim", type=int, default=64,
+        help="Dimensionality of the features extracted by the model")
+    return P
+
+def parser_with_training_args(P):
+    P.add_argument("--leaky_relu", type=int, default=0, choices=[0, 1],
+        help="Use LeakyReLU instead of ReLU")
+    P.add_argument("--lrs", default=[0, 1e-5], type=float, nargs="*",
+        help="Learning rates. Even indices give step indices, odd indices give the learning rate to start at the step given at the prior index.")
+    P.add_argument("--epochs",type=int, default=500,
+        help="Number of epochs/samplings")
+    P.add_argument("--bs",type=int, default=1000,
+        help="Batch size")
     P.add_argument("--wd", type=float, default=1e-5,
         help="Weight decay on generative task")
     P.add_argument("--zero_half_target", choices=[0, 1, 2], default=0, type=int,

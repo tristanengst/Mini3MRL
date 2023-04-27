@@ -7,6 +7,7 @@ import os
 import torch
 from torch.utils.data import Dataset
 from torchvision.datasets import MNIST, CIFAR10
+import torchvision
 import torchvision.transforms as transforms
 import torch.nn as nn
 from tqdm import tqdm

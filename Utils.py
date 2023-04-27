@@ -166,6 +166,9 @@ def compose(*args):
         return x
     return f
 
+def namespace_union(*ns):
+    """Returns the union of arpgarse Namespaces [ns]."""
+    return argparse.Namespace(**{k: v for n in ns for k,v in vars(n).items()})
 
 def hierararchical_hasattr(obj, attrs_list):
     """Returns if the sequence of attributes in [attrs_list] accesses something
@@ -180,7 +183,7 @@ def hierararchical_hasattr(obj, attrs_list):
             return False
     return True
 
-def images_to_pil_image(images, sigmoid=False):
+def images_to_pil_image(images, sigmoid=False, clip=False):
     if len(images.shape) == 5:
         pass
     elif len(images.shape) == 4 and images.shape[-1] == 28:
@@ -193,7 +196,7 @@ def images_to_pil_image(images, sigmoid=False):
     images = images.view(nrow * ncol, *images.shape[2:])
     
     images = torch.sigmoid(images) if sigmoid else images
-    images = torch.clip(images, 0, 1)
+    images = torch.clip(images, 0, 1) if clip else images
     grid = torchvision.utils.make_grid(images,
         nrow=nrow, ncol=ncol,
         normalize=True)
