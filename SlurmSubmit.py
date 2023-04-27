@@ -67,7 +67,7 @@ if __name__ == "__main__":
         args = DAE.get_args(unparsed_args)
         name = os.path.basename(DAE.dae_model_folder(args))
         args, file_move_command = get_args_with_data_on_node(args,
-            arg_names_to_move=["data_tr", "data_val"])
+            arg_names_to_move=["data_tr", "data_val"])  
         num_gpus = len(args.gpus)
         num_cpus = min(12, max(1, num_gpus) * 12)
     elif slurm_args.script in ["IMLE.py", "IMLEOneDimension.py"]:

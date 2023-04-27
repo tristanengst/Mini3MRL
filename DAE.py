@@ -257,8 +257,6 @@ class ImageDataset(Dataset):
 
         result = Utils.images_to_pil_image(output,
             sigmoid=(args.loss == "bce"), clip=(args.data_tr == "mnist"))
-        result.save("foo.png")
-        assert 0
         return result
 
     @staticmethod
