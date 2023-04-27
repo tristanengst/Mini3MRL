@@ -3,7 +3,7 @@ import os
 from tqdm import tqdm
 
 import DAE
-import IMLE_DAE
+import IMLE
 
 chunked_scripts = []
 
