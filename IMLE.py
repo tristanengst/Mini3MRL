@@ -212,7 +212,8 @@ class ImageLatentDataset(Dataset):
                 desc=f"Generating embeddings for ImageLatentDataset [mode={mode}]",
                 total=len(loader),
                 leave=False,
-                dynamic_ncols=True):
+                dynamic_ncols=True,
+                file=sys.stdout):
 
 
                 if mode == "no_noise":
@@ -285,7 +286,9 @@ class ImageLatentDataset(Dataset):
                 desc="Generating images from ImageLatentDataset",
                 total=len(loader),
                 leave=False,
-                dynamic_ncols=True):
+                dynamic_ncols=True,
+                file=sys.stdout):
+
                 start_idx = idx * gen_images_batch_size
                 stop_idx = min(len(data), (idx+1) * gen_images_batch_size)
 
@@ -328,7 +331,8 @@ class ImageLatentDataset(Dataset):
                 desc="Evaluating on ImageLatentDataset",
                 total=len(loader),
                 leave=False,
-                dynamic_ncols=True):
+                dynamic_ncols=True,
+                file=sys.stdout):
 
                 xn = xn.to(device, non_blocking=True)
                 z = z.to(device, non_blocking=True) if use_sampled_codes else None
@@ -357,7 +361,8 @@ class ImageLatentDataset(Dataset):
                 desc="Sampling outer loop",
                 total=len(loader),
                 leave=False,
-                dynamic_ncols=True):
+                dynamic_ncols=True,
+                file=sys.stdout):
 
                 start_idx = idx * args.code_bs
                 stop_idx = min(start_idx + args.code_bs, d)
@@ -378,7 +383,8 @@ class ImageLatentDataset(Dataset):
                 for sample_idx in tqdm(range(args.ns),
                     desc="Sampling inner loop",
                     leave=False,
-                    dynamic_ncols=True):
+                    dynamic_ncols=True,
+                    file=sys.stdout):
 
                     z = Utils.de_dataparallel(model).get_codes(len(xn), device=xn.device)
                     fxn = model(xn, z)
@@ -392,7 +398,8 @@ class ImageLatentDataset(Dataset):
                 for sample_idx in tqdm(range(args.ns),
                     desc="Sampling inner loop",
                     leave=False,
-                    dynamic_ncols=True):
+                    dynamic_ncols=True,
+                    file=sys.stdout):
 
                     z = Utils.de_dataparallel(model).get_codes(len(xn), device=xn.device)
                     fxn = model(xn, z)
@@ -437,7 +444,8 @@ class ImageLatentDataset(Dataset):
                 desc="Sampling outer loop",
                 total=len(loader),
                 leave=False,
-                dynamic_ncols=True):
+                dynamic_ncols=True,
+                file=sys.stdout):
 
                 start_idx = idx * args.code_bs
                 stop_idx = min(start_idx + args.code_bs, len(dataset))
@@ -458,7 +466,8 @@ class ImageLatentDataset(Dataset):
                 for sample_idx in tqdm(range(args.ns),
                     desc="Sampling inner loop",
                     leave=False,
-                    dynamic_ncols=True):
+                    dynamic_ncols=True,
+                    file=sys.stdout):
 
                     z = Utils.de_dataparallel(model).get_codes(len(xn), device=xn.device)
                     fxn = model(xn, z)
@@ -557,7 +566,8 @@ if __name__ == "__main__":
         _ = evaluate(model, data_tr, data_val, scheduler, args, cur_step)
     for epoch in tqdm(range(last_epoch + 1, args.epochs),
         dynamic_ncols=True,
-        desc="Epochs"):
+        desc="Epochs",
+        file=sys.stdout):
 
         epoch_dataset = ImageLatentDataset.get_image_latent_dataset(
             model=model,
@@ -576,7 +586,8 @@ if __name__ == "__main__":
             desc="Batches",
             total=len(loader),
             leave=False,
-            dynamic_ncols=True):
+            dynamic_ncols=True,
+            file=sys.stdout):
 
             xn = xn.to(device, non_blocking=True)
             z = z.to(device, non_blocking=True)
