@@ -183,7 +183,8 @@ class ImageDataset(Dataset):
                 desc=f"Generating embeddings for ImageDataset [mode={mode}]",
                 total=len(loader),
                 leave=False,
-                dynamic_ncols=True):
+                dynamic_ncols=True,
+                file=sys.stdout):
 
 
                 if mode == "no_noise":
@@ -241,6 +242,7 @@ class ImageDataset(Dataset):
             for idx,((x,_),(nx,t)) in tqdm(enumerate(loader),
                 desc="Generating images from ImageDataset",
                 total=len(loader),
+                file=sys.stdout,
                 leave=False,
                 dynamic_ncols=True):
                 start_idx = idx * args.bs
@@ -249,11 +251,6 @@ class ImageDataset(Dataset):
                 output[start_idx:stop_idx, 0] = t
                 output[start_idx:stop_idx, 1] = nx
                 output[start_idx:stop_idx, 2] = model(nx).cpu()
-
-                # for j_idx in range(num_samples // 2):
-                #     nx = Utils.with_noise(x, std=args.std, seed=noise_seed+j_idx)
-                #     output[start_idx:stop_idx, 3+j_idx*2] = nx
-                #     output[start_idx:stop_idx, 4+j_idx*2] = model(nx).cpu()
 
         result = Utils.images_to_pil_image(output,
             sigmoid=(args.loss == "bce"), clip=(args.data_tr == "mnist"))
@@ -275,12 +272,6 @@ class ImageDataset(Dataset):
         loss, total = 0, 0
         loss_fn = Models.get_loss_fn(args, reduction="mean")
 
-        # if args.arch == "conv":
-        #     nx_data = Subset(nx_data, indices=Utils.sample(
-        #         range(len(nx_data)),
-        #         k=min(len(nx_data), 1000),
-        #         seed=args.seed))
-
         with torch.no_grad():
             loader = DataLoader(nx_data,
                 batch_size=args.bs * 8,
@@ -291,6 +282,7 @@ class ImageDataset(Dataset):
                 desc="Evaluating on ImageDataset",
                 total=len(loader),
                 leave=False,
+                file=sys.stdout,
                 dynamic_ncols=True):
 
                 xn = xn.to(device, non_blocking=True)
@@ -324,6 +316,7 @@ class ImageDataset(Dataset):
                 desc="Sampling outer loop",
                 total=len(loader),
                 leave=False,
+                file=sys.stdout,
                 dynamic_ncols=True):
 
                 start_idx = idx * args.bs
@@ -419,7 +412,8 @@ if __name__ == "__main__":
     _ = evaluate(model, data_tr, data_val, scheduler, args, cur_step)
     for epoch in tqdm(range(last_epoch + 1, args.epochs),
         dynamic_ncols=True,
-        desc="Epochs"):
+        desc="Epochs",
+        file=sys.stdout):
 
         epoch_dataset = ImageDataset.get_image_dataset(
             model=model,
@@ -434,7 +428,8 @@ if __name__ == "__main__":
         for xn,x in tqdm(loader,
             desc="Batches",
             leave=False,
-            dynamic_ncols=True):
+            dynamic_ncols=True,
+            file=sys.stdout):
 
             xn = xn.to(device, non_blocking=True)
             x = x.to(device, non_blocking=True)
