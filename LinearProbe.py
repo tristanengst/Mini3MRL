@@ -50,7 +50,6 @@ def get_encoder_from_model(model, include_codes=False):
     else:
         return Utils.de_dataparallel(model).encoder
 
-
 class ProbeWithBackbone(nn.Module):
     """Neural network implementing a learnable linear probe over a frozen
     encoder [encoder].

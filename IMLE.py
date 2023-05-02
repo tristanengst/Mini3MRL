@@ -215,7 +215,6 @@ class ImageLatentDataset(Dataset):
                 dynamic_ncols=True,
                 file=sys.stdout):
 
-
                 if mode == "no_noise":
                     model_input = (x.to(device, non_blocking=True),)
                 elif mode == "pre_fuse":
@@ -451,15 +450,6 @@ class ImageLatentDataset(Dataset):
                 stop_idx = min(start_idx + args.code_bs, len(dataset))
                 x = x.to(device, non_blocking=True)
                 xn = Utils.with_noise(x, std=args.std)
-                
-                # Sanity check for IMLE. This should force the model to learn to
-                # drop either the top of bottom of images it generates.
-                if args.zero_half_target:
-                    drop_top_idxs = torch.rand(len(x)) < .5
-                    drop_bottom_idxs = ~drop_top_idxs
-                    x[drop_top_idxs, :, :14, :] = 0
-                    x[drop_bottom_idxs, :, 14:, :] = 0
-
                 noised_images[start_idx:stop_idx] = xn.cpu()
                 images[start_idx:stop_idx] = x.cpu()
 
