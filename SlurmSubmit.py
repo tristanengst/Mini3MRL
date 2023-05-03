@@ -54,6 +54,7 @@ def get_slurm_args():
         help="Zero-indexed index of last chunk to run, (ie. 9 to run 10 chunks")
     P.add_argument("--env", default="conda", choices=["conda", "pip"],
         help="Python environment type")
+    P.add_argument("--env_dir", default="~/virtual_envs/py3103MRL", type=str, help="Path to python environment")
     P.add_argument("--gpu_type", default="adapt", choices=["a100", "v100l", "adapt"],
         help="GPU type. 'adapt' to set adaptively")
     P.add_argument("--mem", default="adapt",
@@ -99,7 +100,7 @@ if __name__ == "__main__":
     if slurm_args.env == "conda":
         env_str = "conda activate py3103MRL"
     elif slurm_args.env == "pip":
-        env_str = "module load python/3.10\nsource ~/virtual_envs/py3103MRL/bin/activate"
+        env_str = "module load python/3.10\nsource {}/bin/activate".format(slurm_args.env_dir)
 
     with open("slurm/slurm_template.txt", "r") as f:
         slurm_template = f.read()

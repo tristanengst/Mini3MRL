@@ -125,9 +125,9 @@ def parser_with_training_args(P):
     return P
 
 def parser_with_probe_args(P):
-    P.add_argument("--probe_lrs", default=[0, 1e-3], type=float, nargs="*",
+    P.add_argument("--probe_lrs", default=[0, 1e-3, 75, 1e-4, 90, 1e-5], type=float, nargs="*",
         help="Learning rates. Even indices give step indices, odd indices give the learning rate to start at the step given at the prior index.")
-    P.add_argument("--probe_epochs",type=int, default=10,
+    P.add_argument("--probe_epochs",type=int, default=100,
         help="Number of epochs for the probe")
     P.add_argument("--probe_linear", choices=[0, 1], default=0, type=int,
         help="Whether to include a linear probe")
@@ -141,6 +141,7 @@ def parser_with_probe_args(P):
         help="Whether features input to the probes should be normalized")
     P.add_argument("--probe_trials", default=1, type=int,
         help="Number of probe trials to conduct")
+    P.add_argument("--probe_bs", default=1000, type=int, help="Batch size for probe")
     return P
 
 def parser_with_imle_args(P):
@@ -151,7 +152,7 @@ def parser_with_imle_args(P):
     P.add_argument("--code_bs", type=int, default=60000,
         help="Number of images to sample codes for at once")
     P.add_argument("--ipe", default=20, type=int,
-        help="Number of gradient steps per code.")
+        help="Number of gradient steps per example.")
     P.add_argument("--adain_x_norm", default="none", choices=["none", "norm"],
         help="Kind of normalization in AdaIN")
     P.add_argument("--mapping_net_h_dim", default=512, type=int,

@@ -311,12 +311,12 @@ if __name__ == "__main__":
 
     data_tr, data_val = Data.get_data_from_args(args)
     loader_tr = DataLoader(data_tr,
-        batch_size=args.bs,
+        batch_size=args.probe_bs,
         shuffle=True,
         num_workers=args.num_workers,
         pin_memory=True)
     loader_val = DataLoader(data_val,
-        batch_size=args.bs,
+        batch_size=args.probe_bs,
         num_workers=args.num_workers,
         pin_memory=True)
 
