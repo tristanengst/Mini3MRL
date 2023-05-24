@@ -9,3 +9,5 @@ wandb
 *cifar-10*
 .wandb_sync_lock_file
 /experiments/
+/results/
+/run.sh
