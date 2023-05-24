@@ -30,11 +30,7 @@ def probe(model, loader_tr, loader_val, args):
             eval_fns.append(partial(linear_probe, include_codes=True))
         elif args.probe_include_codes in [0, 2]:
             eval_fns.append(partial(linear_probe, include_codes=False))
-    if args.probe_mlp:
-        if args.probe_include_codes in [1, 2]:
-            eval_fns.append(partial(mlp_probe, include_codes=True))
-        elif args.probe_include_codes in [0, 2]:
-            eval_fns.append(partial(mlp_probe, include_codes=False))
+
 
     results = [f(model, loader_tr, loader_val, args) for f in tqdm(eval_fns,
         desc="Running probes",
@@ -340,28 +336,5 @@ if __name__ == "__main__":
             probe_acc_end_val = torch.tensor(probe_acc_end_val)
             probe_acc_max_val = torch.tensor(probe_acc_max_val)
             tqdm.write(f"LINEAR PROBE=[acc_end/val_mean={probe_acc_end_val.mean():.5f} acc_end/val_std={probe_acc_end_val.std():.5f} acc_max/val_mean={probe_acc_max_val.mean():.5f} acc_max/val_std={probe_acc_max_val.std():.5f}]")
-
-    if args.probe_mlp:
-        if args.probe_include_codes in [1, 2]:
-            raise NotImplementedError()
-        elif args.probe_include_codes in [0, 2]:
-            probe_acc_max_val = []
-            probe_acc_end_val = []
-            for t in tqdm(range(args.probe_trials),
-                leave=True,
-                dynamic_ncols=True,
-                desc="Trials"):
-
-                result = mlp_probe(model.module, loader_tr, loader_val, args, include_codes=True)
-                probe_acc_max_val.append(result["acc/mlp_probe_max/val"])
-                probe_acc_end_val.append(result["acc/mlp_probe_end/val"])
-
-            probe_acc_end_val = torch.tensor(probe_acc_end_val)
-            probe_acc_max_val = torch.tensor(probe_acc_max_val)
-            tqdm.write(f"MLP PROBE=[acc_end/val_mean={probe_acc_end_val.mean():.5f} acc_end/val_std={probe_acc_end_val.std():.5f} acc_max/val_mean={probe_acc_max_val.mean():.5f} acc_max/val_std={probe_acc_max_val.std():.5f}]")
-
-
-
-
 
     

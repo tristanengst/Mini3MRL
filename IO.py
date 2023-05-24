@@ -49,7 +49,7 @@ def parser_with_logging_args(P):
     P.add_argument("--save_epochs", nargs="*", default=[], type=int,
         help="List of epoch indices on which to necessarily save the model.")
     P.add_argument("--probe_iter", default=1, type=int,
-        help="Probe every PROBE_ITER epochs/samplings if we're also evaluating")
+        help="Probe every PROBE_ITER epochs/samplings if we're also evaluating (10-20 times during the whole training is informative)")
     P.add_argument("--probe_eval_iter", default=10, type=int,
         help="Evaluate the probe every PROBE_EVAL_ITER epochs during probing")
     P.add_argument("--num_eval_images", type=int, default=10,
@@ -131,8 +131,6 @@ def parser_with_probe_args(P):
         help="Number of epochs for the probe")
     P.add_argument("--probe_linear", choices=[0, 1], default=0, type=int,
         help="Whether to include a linear probe")
-    P.add_argument("--probe_mlp", choices=[0, 1], default=0, type=int,
-        help="Whether the probe should include an MLP")
     P.add_argument("--probe_include_codes", choices=[0, 1, 2], default=0, type=int,
         help="Whether the probe should include latents. 2 does it both ways")
     P.add_argument("--probe_verbosity", choices=[0, 1], default=1, type=int,

@@ -495,7 +495,7 @@ def get_args(args=None):
     args.lrs = Utils.StepScheduler.process_lrs(args.lrs)
     args.probe_lrs = Utils.StepScheduler.process_lrs(args.probe_lrs)
 
-    if not args.probe_linear and not args.probe_mlp:
+    if not args.probe_linear:
         tqdm.write(f"---------\nWARNING: Will not conduct any probes.\n---------")
     if not args.probe_trials == 1:
         raise NotImplementedError(f"Running multiple probe trials is currently not supported in a script that logs to WandB.")
@@ -549,8 +549,9 @@ if __name__ == "__main__":
     if not args.save_iter == 0:
         _ = Utils.save_code_under_folder(imle_model_folder(args))
 
-    cur_step = (last_epoch + 1) * args.ipe * math.ceil(len(data_tr) / args.bs)
-    num_steps = args.epochs * args.ipe * math.ceil(len(data_tr) / args.bs)
+    cur_step = (last_epoch + 1) * math.ceil(args.ipe * len(data_tr) / args.bs)
+    num_steps = args.epochs * math.ceil(args.ipe * len(data_tr) / args.bs)
+    step_log_iter = max(1, num_steps // 10000)
 
     if not args.eval_iter == 0:
         _ = evaluate(model, data_tr, data_val, scheduler, args, cur_step)
@@ -588,6 +589,14 @@ if __name__ == "__main__":
             loss.backward()
             optimizer.step()
             model.zero_grad(set_to_none=True)
+
+            if cur_step % step_log_iter == 0:
+                wandb.log({"loss/batch": loss.item(),
+                    "lr": scheduler.get_lr(),
+                    "epoch": epoch,
+                    "train_step": cur_step},
+                    step=cur_step)
+                
             cur_step += 1
         
         if not args.eval_iter == 0 and (epoch % args.eval_iter == 0
