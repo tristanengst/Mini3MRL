@@ -59,6 +59,8 @@ def get_slurm_args():
         help="GPU type. 'adapt' to set adaptively")
     P.add_argument("--mem", default="adapt",
         help="RAM—specify SLURM argument '100G'")
+    P.add_argument("--email", default=None,
+        help="Specify email to be notified when job starts and ends")
     return P.parse_known_args()
 
 if __name__ == "__main__":
@@ -118,6 +120,7 @@ if __name__ == "__main__":
     slurm_template = slurm_template.replace("SCRIPT", script)
     slurm_template = slurm_template.replace("GPU_TYPE", slurm_args.gpu_type)
     slurm_template = slurm_template.replace("MEM", slurm_args.mem)
+    slurm_template = slurm_template.replace("EMAIL", slurm_args.email)
 
     slurm_script = f"slurm/{name}.sh"
     with open(slurm_script, "w+") as f:
