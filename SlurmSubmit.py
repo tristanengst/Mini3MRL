@@ -1,7 +1,7 @@
 import argparse
 import os
 from tqdm import tqdm
-
+import Utils
 import DAE
 import IMLE
 
@@ -63,7 +63,7 @@ def get_slurm_args():
 
 if __name__ == "__main__":
     slurm_args, unparsed_args = get_slurm_args()
-
+    Utils.conditional_make_folder("job_results")
     if slurm_args.script == "DAE.py":
         args = DAE.get_args(unparsed_args)
         name = os.path.basename(DAE.dae_model_folder(args))
