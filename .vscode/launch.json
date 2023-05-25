@@ -1,0 +1,17 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Current File",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": ["IMLE", "--suffix", "exp_1_1", "--save_folder", "/home/samp8/scratch/Mini3MRL/", "--gpus", "0", "--data_tr", "mnist", "--data_val", "mnist", "--eval_iter", "50", "--save_iter", "50", "--probe_linear", "1", "--time", "03:00:00", "--env", "pip", "--env_dir", "/home/samp8/PythonENVs/py3103MRL/", "--mem", "30"]
+        }
+    ]
+}
