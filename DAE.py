@@ -136,15 +136,15 @@ def evaluate(model, data_tr, data_val, scheduler, args, cur_step, nx_data_tr=Non
         tqdm.write(f"Computed epoch as {epoch} so not probing")
         probe_results = {}
 
-    # wandb.log(probe_results | embedding_results | embedding_visualization | {
-    #     "loss/mean/tr": loss_tr_mean,
-    #     "loss/mean/val": loss_val_mean,
-    #     "lr": scheduler.get_lr(),
-    #     "train_step": cur_step,
-    #     "images/val": wandb.Image(images_val),
-    #     "images/tr": wandb.Image(images_tr),
-    #     "epoch": epoch,
-    # }, step=cur_step)
+    wandb.log(probe_results | embedding_results | embedding_visualization | {
+        "loss/mean/tr": loss_tr_mean,
+        "loss/mean/val": loss_val_mean,
+        "lr": scheduler.get_lr(),
+        "train_step": cur_step,
+        "images/val": wandb.Image(images_val),
+        "images/tr": wandb.Image(images_tr),
+        "epoch": epoch,
+    }, step=cur_step)
 
 class ImageDataset(Dataset):
     def __init__(self, data, noised_images, images):
