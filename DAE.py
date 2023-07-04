@@ -136,7 +136,7 @@ def evaluate(model, data_tr, data_val, scheduler, args, cur_step, nx_data_tr=Non
         tqdm.write(f"Computed epoch as {epoch} so not probing")
         probe_results = {}
 
-    wandb.log(probe_results | embedding_results | embedding_visualization | {
+    wandb.log(probe_results | {
         "loss/mean/tr": loss_tr_mean,
         "loss/mean/val": loss_val_mean,
         "lr": scheduler.get_lr(),
